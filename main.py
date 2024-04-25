@@ -1,5 +1,5 @@
 from flask import Flask, request, make_response, redirect, url_for
-from flask_mysqldb import MySQL
+from flask_pymongo import PyMongo
 
 """
 Description: This project will act as a way to connect students (previous, current, or future) to track the classes they have taken.
@@ -9,17 +9,10 @@ Users may also search for other individuals who have taken / will take a given c
 """
 
 app = Flask(__name__)
-
-app.config["MYSQL_USER"] = "root"
-app.config["MYSQL_PASSWORD"] = "password"
-app.config["MYSQL_HOST"] = "127.0.0.1"
-app.config["MYSQL_CURSORCLASS"] = "DictCursor"
-app.config["MYSQL_PORT"] = 3306
-# app.config["MYSQL_DB"] = "cpsc_449"
-# app.config["MYSQL_PORT"] = 3307
-app.config["MYSQL_DB"] = "cpsc-449"
-
-mysql = MySQL(app)
+app.config["MONGO_URI"] = (
+    "mongodb://admin:password@127.0.0.1:27017/main?authSource=admin"
+)
+mongo = PyMongo(app)
 
 
 def response(data, status_code=200):
@@ -43,82 +36,76 @@ def response(data, status_code=200):
 ###########################################
 @app.route("/initialize-db", methods=["POST"])
 def initialize_db():
-    cur = mysql.connection.cursor()
-    # ? drop tables if they exist
-    cur.execute("DROP TABLE IF EXISTS enrollments")
-    cur.execute("DROP TABLE IF EXISTS students")
-    cur.execute("DROP TABLE IF EXISTS classes")
+    # Dropping collections if they exist
+    mongo.db.main.students.drop()
+    mongo.db.main.classes.drop()
+    mongo.db.enrollments.drop()
 
-    # ? create tables
-    cur.execute(
-        "CREATE TABLE students (id INT AUTO_INCREMENT PRIMARY KEY, email VARCHAR(255), full_name VARCHAR(255), grad_year INT)"
-    )
-    cur.execute(
-        "CREATE TABLE classes (id INT AUTO_INCREMENT PRIMARY KEY, subject VARCHAR(255), class_number INT, semester VARCHAR(255), school_year INT, professor VARCHAR(255))"
-    )
-    cur.execute(
-        "CREATE TABLE enrollments (id INT AUTO_INCREMENT PRIMARY KEY, student_id INT, class_id INT)"
-    )
-
-    # ? foreign key constraints
-    cur.execute(
-        "ALTER TABLE enrollments ADD CONSTRAINT fk_student_id FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE"
-    )
-    cur.execute(
-        "ALTER TABLE enrollments ADD CONSTRAINT fk_class_id FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE"
+    # Optionally, you can create indexes here
+    mongo.db.students.create_index("email", unique=True)
+    mongo.db.classes.create_index(
+        [
+            ("subject", 1),
+            ("class_number", 1),
+            ("semester", 1),
+            ("school_year", 1),
+            ("professor", 1),
+        ],
+        unique=True,
     )
 
-    # ? unique constraints
-    cur.execute("ALTER TABLE students ADD CONSTRAINT unique_email UNIQUE (email)")
-    cur.execute(
-        "ALTER TABLE classes ADD CONSTRAINT unique_class UNIQUE (subject, class_number, semester, school_year, professor)"
-    )
-
-    mysql.connection.commit()
-    cur.close()
     return response({"msg": "Database Initialized!"})
 
 
 @app.route("/seed-db", methods=["POST"])
 def seed_db():
-    cur = mysql.connection.cursor()
-
     students = [
-        ("john@csu.fullerton.edu", "John Smith", 2023),
-        ("jane@csu.fullerton.edu", "Jane Smith", 2022),
-        ("jack@csu.fullerton.edu", "Jack Smith", 2021),
+        {
+            "email": "john@csu.fullerton.edu",
+            "full_name": "John Smith",
+            "grad_year": 2023,
+        },
+        {
+            "email": "jane@csu.fullerton.edu",
+            "full_name": "Jane Smith",
+            "grad_year": 2022,
+        },
+        {
+            "email": "jack@csu.fullerton.edu",
+            "full_name": "Jack Smith",
+            "grad_year": 2021,
+        },
     ]
-
-    for student in students:
-        cur.execute(
-            "INSERT INTO students (email, full_name, grad_year) VALUES (%s, %s, %s)",
-            student,
-        )
+    # Inserting students and obtaining inserted_ids for further reference
+    inserted_students = mongo.db.students.insert_many(students).inserted_ids
 
     classes = [
-        ("CPSC", 349, "Fall", 2021, "Dr. Smith"),
-        ("CPSC", 335, "Fall", 2021, "Dr. Smith"),
+        {
+            "subject": "CPSC",
+            "class_number": 349,
+            "semester": "Fall",
+            "school_year": 2021,
+            "professor": "Dr. Smith",
+        },
+        {
+            "subject": "CPSC",
+            "class_number": 335,
+            "semester": "Fall",
+            "school_year": 2021,
+            "professor": "Dr. Smith",
+        },
     ]
-
-    for class_ in classes:
-        cur.execute(
-            "INSERT INTO classes (subject, class_number, semester, school_year, professor) VALUES (%s, %s, %s, %s, %s)",
-            class_,
-        )
+    # Inserting classes and obtaining inserted_ids for enrollments
+    inserted_classes = mongo.db.classes.insert_many(classes).inserted_ids
 
     enrollments = [
-        (1, 1),
-        (2, 1),
-        (2, 2),
-        (3, 2),
+        {"student_id": inserted_students[0], "class_id": inserted_classes[0]},
+        {"student_id": inserted_students[1], "class_id": inserted_classes[0]},
+        {"student_id": inserted_students[1], "class_id": inserted_classes[1]},
+        {"student_id": inserted_students[2], "class_id": inserted_classes[1]},
     ]
-    for enrollment in enrollments:
-        cur.execute(
-            "INSERT INTO enrollments (student_id, class_id) VALUES (%s, %s)", enrollment
-        )
+    mongo.db.enrollments.insert_many(enrollments)
 
-    mysql.connection.commit()
-    cur.close()
     return response({"msg": "Database Seeded!"})
 
 
@@ -141,6 +128,8 @@ def login():
 ###########################################
 @app.route("/student", methods=["POST"])
 def create_student():
+    students = mongo.db.students
+
     fields = ["email", "full_name", "grad_year"]
     for field in fields:
         if field not in request.form:
@@ -156,213 +145,196 @@ def create_student():
         return response({"msg": "Grad Year must be an integer!"}, 400)
 
     if email and full_name and grad_year:
-        cur = mysql.connection.cursor()
-
-        # check for existing student with that email
-        cur.execute("SELECT * FROM students WHERE email = %s", (email,))
-        data = cur.fetchone()
-        if data:
+        if students.find_one({"email": email}):
             res = response({"msg": "A student with that email already exists"}, 409)
-        else:
-            cur.execute(
-                "INSERT INTO students (email, full_name, grad_year) VALUES (%s, %s, %s)",
-                (email, full_name, grad_year),
-            )
-            mysql.connection.commit()
-            cur.execute("SELECT * FROM students WHERE email = %s", (email,))
-            new_student = cur.fetchone()
-            res = response({"msg": "Student Created!", "student": new_student}, 201)
-        cur.close()
-    else:
-        res = response({"msg": "Fields Empty!"}, 422)
 
-    return res
+        students.insert_one(
+            {"email": email, "full_name": full_name, "grad_year": grad_year}
+        )
+        student = students.find_one({"email": email})
+        student["_id"] = str(student["_id"])
+
+    else:
+        return response({"msg": "Fields Empty!"}, 400)
+    return response({"msg": "Student Created!", "student": student}, 201)
 
 
 @app.route("/student/<string:email>", methods=["GET"])
-def get_student(email: str):
-    cur = mysql.connection.cursor()
-    cur.execute("SELECT * FROM students WHERE email = %s", (email,))
-    data = cur.fetchone()
-    if not data:
-        res = response({"msg": "Student Not Found!"}, 404)
-    else:
-        res = response({"student": data})
-    cur.close()
-    return res
+def get_student(email):
+    student = mongo.db.students.find_one({"email": email})
+    if not student:
+        return response({"msg": "Student Not Found!"}, 404)
+
+    student["_id"] = str(student["_id"])
+    return response({"student": student})
 
 
-@app.route(
-    "/student/subject/<string:subject>/class-number/<int:class_number>", methods=["GET"]
-)
-def get_students_by_enrollments_in_class(subject: str, class_number: str):
-    cur = mysql.connection.cursor()
-    # check if class exists
-    cur.execute(
-        "SELECT * FROM classes WHERE subject = %s AND class_number = %s",
-        (subject, class_number),
-    )
-    class_ = cur.fetchone()
-    if not class_:
-        res = response({"msg": "Class Not Found!"}, 404)
-    else:
-        cur.execute(
-            "SELECT * FROM students s JOIN enrollments e ON s.id = e.student_id JOIN classes c ON c.id = e.class_id WHERE c.subject = %s AND c.class_number = %s",
-            (subject, class_number),
-        )
-        students = cur.fetchall()
-        students = [
-            {
-                "email": student["email"],
-                "full_name": student["full_name"],
-                "grad_year": student["grad_year"],
-            }
-            for student in students
-        ]
+# @app.route(
+#     "/student/subject/<string:subject>/class-number/<int:class_number>", methods=["GET"]
+# )
+# def get_students_by_enrollments_in_class(subject: str, class_number: str):
+#     cur = mysql.connection.cursor()
+#     # check if class exists
+#     cur.execute(
+#         "SELECT * FROM classes WHERE subject = %s AND class_number = %s",
+#         (subject, class_number),
+#     )
+#     class_ = cur.fetchone()
+#     if not class_:
+#         res = response({"msg": "Class Not Found!"}, 404)
+#     else:
+#         cur.execute(
+#             "SELECT * FROM students s JOIN enrollments e ON s.id = e.student_id JOIN classes c ON c.id = e.class_id WHERE c.subject = %s AND c.class_number = %s",
+#             (subject, class_number),
+#         )
+#         students = cur.fetchall()
+#         students = [
+#             {
+#                 "email": student["email"],
+#                 "full_name": student["full_name"],
+#                 "grad_year": student["grad_year"],
+#             }
+#             for student in students
+#         ]
 
-        res = response({"class": class_, "students": students})
+#         res = response({"class": class_, "students": students})
 
-    cur.close()
-    return res
+#     cur.close()
+#     return res
 
 
 @app.route("/student/<string:email>", methods=["PUT"])
-def update_student(email: str):
+def update_student(email):
     try:
         request_data = request.get_json()
     except:
         return response({"msg": "No data provided!"}, 400)
 
-    cur = mysql.connection.cursor()
-    cur.execute("SELECT * FROM students WHERE email = %s", (email,))
-    student = cur.fetchone()
-
+    student = mongo.db.students.find_one({"email": email})
     if not student:
-        res = response({"msg": "Student Not Found!"}, 404)
-    else:
-        sql_prompt = "UPDATE students SET"
-        sql_select = f'SELECT * FROM students WHERE email = "{email}"'
-        potential_args = [
-            {"sql": "full_name", "value": request_data.get("full_name", None)},
-            {"sql": "grad_year", "value": request_data.get("grad_year", None)},
-        ]
+        return response({"msg": "Student Not Found!"}, 404)
 
-        arg_count = 0
-        for arg in potential_args:
-            if arg["value"]:
-                if arg_count > 0:
-                    sql_prompt += ","
-                sql_select += " AND"
-                arg_count += 1
-                temp = arg["value"]
-                if type(arg["value"]) is str:
-                    temp = f'"{arg["value"]}"'
-                sql_prompt += f" {arg['sql']} = {temp}"
-                sql_select += f" {arg['sql']} = {temp}"
+    updated_data = {
+        k: v for k, v in request_data.items() if k in ["full_name", "grad_year"]
+    }
 
-        sql_prompt += f' WHERE email = "{email}"'
+    if len(updated_data) == 0:
+        return response({"msg": "Fields Missing!"}, 400)
 
-        if arg_count > 0:
-            cur.execute(sql_select)
-            data = cur.fetchone()
-            if data:
-                res = response({"msg": "No changes were made", "student": data})
-            else:
-                cur.execute(sql_prompt)
+    result = mongo.db.students.update_one({"email": email}, {"$set": updated_data})
+    if result.modified_count == 0:
+        return response({"msg": "No changes were made or student not found"}, 400)
 
-                cur.execute("SELECT * FROM students WHERE email = %s", (email,))
-                updated_student = cur.fetchone()
-
-                res = response(
-                    {"msg": "Student Updated!", "student": updated_student}, 200
-                )
-        else:
-            res = response({"msg": "Fields Missing!"}, 400)
-    mysql.connection.commit()
-    cur.close()
-    return res
+    student = mongo.db.students.find_one({"email": email})
+    return response({"msg": "Student Updated!", "student": student})
 
 
-@app.route("/student/<string:email>", methods=["DELETE"])
-def delete_student(email: str):
-    cur = mysql.connection.cursor()
+# @app.route("/student/<string:email>", methods=["DELETE"])
+# def delete_student(email: str):
+#     cur = mysql.connection.cursor()
 
-    # check if student exists
-    cur.execute("SELECT * FROM students WHERE email = %s", (email,))
-    student = cur.fetchone()
-    if not student:
-        res = response({"msg": "Student Not Found!"}, 404)
-    else:
-        cur.execute("DELETE FROM students WHERE email = %s", (email,))
-        mysql.connection.commit()
-        res = response({"msg": "Student Deleted!", "student": student}, 200)
-    cur.close()
-    return res
+#     # check if student exists
+#     cur.execute("SELECT * FROM students WHERE email = %s", (email,))
+#     student = cur.fetchone()
+#     if not student:
+#         res = response({"msg": "Student Not Found!"}, 404)
+#     else:
+#         cur.execute("DELETE FROM students WHERE email = %s", (email,))
+#         mysql.connection.commit()
+#         res = response({"msg": "Student Deleted!", "student": student}, 200)
+#     cur.close()
+#     return res
+# @app.route("/student/<string:email>", methods=["DELETE"])
+# def delete_student(email):
+#     result = mongo.db.students.delete_one({"email": email})
+#     if result.deleted_count == 0:
+#         return response({"msg": "Student Not Found!"}, 404)
+#     return response({"msg": "Student Deleted!"})
 
 
 ##########################################
 # ? CLASS CRUD
 ##########################################
-@app.route("/class", methods=["POST"])
-def create_class():
-    fields = ["subject", "class_number", "semester", "school_year", "professor"]
-    for field in fields:
-        if field not in request.form:
-            return response({"msg": "Fields Missing!"}, 400)
-    subject = request.form["subject"]
-    class_number = request.form["class_number"]
-    semester = request.form["semester"]
-    school_year = request.form["school_year"]
-    professor = request.form["professor"]
+# @app.route("/class", methods=["POST"])
+# def create_class():
+#     fields = ["subject", "class_number", "semester", "school_year", "professor"]
+#     for field in fields:
+#         if field not in request.form:
+#             return response({"msg": "Fields Missing!"}, 400)
+#     subject = request.form["subject"]
+#     class_number = request.form["class_number"]
+#     semester = request.form["semester"]
+#     school_year = request.form["school_year"]
+#     professor = request.form["professor"]
 
-    # class number should be an int
-    try:
-        class_number = int(class_number)
-    except:
-        return response({"msg": "Class Number must be an integer!"}, 400)
+#     # class number should be an int
+#     try:
+#         class_number = int(class_number)
+#     except:
+#         return response({"msg": "Class Number must be an integer!"}, 400)
 
-    # school year should be an int
-    try:
-        school_year = int(school_year)
-    except:
-        return response({"msg": "School Year must be an integer!"}, 400)
+#     # school year should be an int
+#     try:
+#         school_year = int(school_year)
+#     except:
+#         return response({"msg": "School Year must be an integer!"}, 400)
 
-    if subject and class_number and semester and school_year and professor:
-        cur = mysql.connection.cursor()
-        # check for existing class
-        cur.execute(
-            "SELECT * FROM classes WHERE subject = %s AND class_number = %s AND semester = %s AND school_year = %s AND professor = %s",
-            (subject, class_number, semester, school_year, professor),
-        )
-        data = cur.fetchone()
-        if data:
-            res = response({"msg": "A class with that information already exists"}, 409)
-        else:
-            cur.execute(
-                "INSERT INTO classes (subject, class_number, semester, school_year, professor) VALUES (%s, %s, %s, %s, %s)",
-                (subject, class_number, semester, school_year, professor),
-            )
-            mysql.connection.commit()
-            cur.execute(
-                "SELECT * FROM classes WHERE subject = %s AND class_number = %s",
-                (subject, class_number),
-            )
-            new_class = cur.fetchone()
-            res = response({"msg": "Class Created!", "class": new_class}, 201)
-            cur.close()
-    else:
-        res = response({"msg": "Fields Empty!"}, 422)
+#     if subject and class_number and semester and school_year and professor:
+#         cur = mysql.connection.cursor()
+#         # check for existing class
+#         cur.execute(
+#             "SELECT * FROM classes WHERE subject = %s AND class_number = %s AND semester = %s AND school_year = %s AND professor = %s",
+#             (subject, class_number, semester, school_year, professor),
+#         )
+#         data = cur.fetchone()
+#         if data:
+#             res = response({"msg": "A class with that information already exists"}, 409)
+#         else:
+#             cur.execute(
+#                 "INSERT INTO classes (subject, class_number, semester, school_year, professor) VALUES (%s, %s, %s, %s, %s)",
+#                 (subject, class_number, semester, school_year, professor),
+#             )
+#             mysql.connection.commit()
+#             cur.execute(
+#                 "SELECT * FROM classes WHERE subject = %s AND class_number = %s",
+#                 (subject, class_number),
+#             )
+#             new_class = cur.fetchone()
+#             res = response({"msg": "Class Created!", "class": new_class}, 201)
+#             cur.close()
+#     else:
+#         res = response({"msg": "Fields Empty!"}, 422)
 
-    return res
+#     return res
+# @app.route("/class", methods=["POST"])
+# def create_class():
+#     classes = mongo.db.classes
+#     data = {
+#         "subject": request.form["subject"],
+#         "class_number": request.form.get("class_number", type=int),
+#         "semester": request.form["semester"],
+#         "school_year": request.form.get("school_year", type=int),
+#         "professor": request.form["professor"],
+#     }
+
+#     if classes.find_one(data):
+#         return response({"msg": "A class with that information already exists"}, 409)
+
+#     class_id = classes.insert_one(data).inserted_id
+#     return response({"msg": "Class Created!", "class_id": str(class_id)}, 201)
 
 
-@app.route("/class", methods=["GET"])
-def get_all_classes():
-    cur = mysql.connection.cursor()
-    cur.execute("SELECT * FROM classes")
-    data = cur.fetchall()
-    cur.close()
-    return response({"classes": data})
+# @app.route("/class", methods=["GET"])
+# def get_all_classes():
+#     cur = mysql.connection.cursor()
+#     cur.execute("SELECT * FROM classes")
+#     data = cur.fetchall()
+#     cur.close()
+#     return response({"classes": data})
+# @app.route("/class", methods=["GET"])
+# def get_all_classes():
+#     classes = list(mongo.db.classes.find({}))
+#     return response({"classes": classes})
 
 
 @app.route("/class/<int:id>", methods=["PUT"])
@@ -552,54 +524,63 @@ def class_drop(email: str, subject: str, class_number: str):
     return res
 
 
-@app.route("/student/search", methods=["GET"])
-def student_search():
-    sql_prompt = "SELECT DISTINCT s.id, s.email, s.full_name, s.grad_year FROM students s JOIN enrollments e ON s.id = e.student_id JOIN classes c ON e.class_id = c.id"
-    potential_args = [
-        {"key": "email", "sql": "s.email", "value": None},
-        {"key": "full_name", "sql": "s.full_name", "value": None},
-        {"key": "grad_year", "sql": "s.grad_year", "value": None},
-        {"key": "subject", "sql": "c.subject", "value": None},
-        {"key": "class_number", "sql": "c.class_number", "value": None},
-        {"key": "semester", "sql": "c.semester", "value": None},
-        {"key": "school_year", "sql": "c.school_year", "value": None},
-        {"key": "professor", "sql": "c.professor", "value": None},
-    ]
-    collected_args = []
-    for arg in potential_args:
-        value = request.args.get(arg["key"])
-        if value is not None:
-            arg["value"] = value
-            collected_args.append(arg)
+# @app.route("/student/search", methods=["GET"])
+# def student_search():
+#     sql_prompt = "SELECT DISTINCT s.id, s.email, s.full_name, s.grad_year FROM students s JOIN enrollments e ON s.id = e.student_id JOIN classes c ON e.class_id = c.id"
+#     potential_args = [
+#         {"key": "email", "sql": "s.email", "value": None},
+#         {"key": "full_name", "sql": "s.full_name", "value": None},
+#         {"key": "grad_year", "sql": "s.grad_year", "value": None},
+#         {"key": "subject", "sql": "c.subject", "value": None},
+#         {"key": "class_number", "sql": "c.class_number", "value": None},
+#         {"key": "semester", "sql": "c.semester", "value": None},
+#         {"key": "school_year", "sql": "c.school_year", "value": None},
+#         {"key": "professor", "sql": "c.professor", "value": None},
+#     ]
+#     collected_args = []
+#     for arg in potential_args:
+#         value = request.args.get(arg["key"])
+#         if value is not None:
+#             arg["value"] = value
+#             collected_args.append(arg)
 
-    cur = mysql.connection.cursor()
+#     cur = mysql.connection.cursor()
 
-    if len(collected_args) > 0:
-        sql_prompt += " WHERE "
-        for i, arg in enumerate(collected_args):
-            if i > 0:
-                sql_prompt += " AND "
-            sql_prompt += f"{arg['sql']} like '%{arg['value']}%'"
+#     if len(collected_args) > 0:
+#         sql_prompt += " WHERE "
+#         for i, arg in enumerate(collected_args):
+#             if i > 0:
+#                 sql_prompt += " AND "
+#             sql_prompt += f"{arg['sql']} like '%{arg['value']}%'"
 
-        cur.execute(sql_prompt)
-        result = cur.fetchall()
-        result = [
-            {
-                k: v
-                for k, v in row.items()
-                if k in ["id", "email", "full_name", "grad_year"]
-            }
-            for row in result
-        ]
-        if result:
-            res = response({"msg": "Query Successful!", "students": result})
-        else:
-            res = response({"msg": "No Results Found!", "students": []}, 404)
-    else:
-        res = response({"msg": "No Search Parameters Provided!"}, 400)
+#         cur.execute(sql_prompt)
+#         result = cur.fetchall()
+#         result = [
+#             {
+#                 k: v
+#                 for k, v in row.items()
+#                 if k in ["id", "email", "full_name", "grad_year"]
+#             }
+#             for row in result
+#         ]
+#         if result:
+#             res = response({"msg": "Query Successful!", "students": result})
+#         else:
+#             res = response({"msg": "No Results Found!", "students": []}, 404)
+#     else:
+#         res = response({"msg": "No Search Parameters Provided!"}, 400)
 
-    cur.close()
-    return res
+#     cur.close()
+#     return res
+# @app.route("/student/search", methods=["GET"])
+# def student_search():
+#     query = {}
+#     if "email" in request.args:
+#         query["email"] = {"$regex": request.args["email"]}
+#     # Add more fields as needed
+
+#     students = list(mongo.db.students.find(query))
+#     return response({"students": students})
 
 
 @app.route("/class/search", methods=["GET"])
