@@ -1,0 +1,502 @@
+{
+	"info": {
+		"_postman_id": "2781eb15-94c0-46e8-849e-551bdf56804a",
+		"name": "CPSC-449 Midterm",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "28415797"
+	},
+	"item": [
+		{
+			"name": "Index",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{flask_url}}/",
+					"host": [
+						"{{flask_url}}"
+					],
+					"path": [
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "login",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": {
+					"raw": "{{flask_url}}/login",
+					"host": [
+						"{{flask_url}}"
+					],
+					"path": [
+						"login"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "initialize-db",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": {
+					"raw": "{{flask_url}}/initialize-db",
+					"host": [
+						"{{flask_url}}"
+					],
+					"path": [
+						"initialize-db"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "seed-db",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": {
+					"raw": "{{flask_url}}/seed-db",
+					"host": [
+						"{{flask_url}}"
+					],
+					"path": [
+						"seed-db"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "create-student",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "email",
+							"value": "test@test.com",
+							"type": "text"
+						},
+						{
+							"key": "full_name",
+							"value": "testy testerson",
+							"type": "text"
+						},
+						{
+							"key": "grad_year",
+							"value": "202",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "{{flask_url}}/student",
+					"host": [
+						"{{flask_url}}"
+					],
+					"path": [
+						"student"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get-student",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{flask_url}}/student/test@test.com",
+					"host": [
+						"{{flask_url}}"
+					],
+					"path": [
+						"student",
+						"test@test.com"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get-students-by-enrollments-in-classes",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{flask_url}}/student/subject/CPSC/class-number/349",
+					"host": [
+						"{{flask_url}}"
+					],
+					"path": [
+						"student",
+						"subject",
+						"CPSC",
+						"class-number",
+						"349"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "update-student",
+			"request": {
+				"method": "PUT",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"full_name\": \"test\",\n    \"grad_year\": 20213\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{flask_url}}/student/test@test.com",
+					"host": [
+						"{{flask_url}}"
+					],
+					"path": [
+						"student",
+						"test@test.com"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "delete-student",
+			"request": {
+				"method": "DELETE",
+				"header": [],
+				"url": {
+					"raw": "{{flask_url}}/student/test@test.com",
+					"host": [
+						"{{flask_url}}"
+					],
+					"path": [
+						"student",
+						"test@test.com"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "create-class",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "subject",
+							"value": "CPSC",
+							"type": "text"
+						},
+						{
+							"key": "class_number",
+							"value": "332",
+							"type": "text"
+						},
+						{
+							"key": "semester",
+							"value": "FALL",
+							"type": "text"
+						},
+						{
+							"key": "school_year",
+							"value": "2023",
+							"type": "text"
+						},
+						{
+							"key": "professor",
+							"value": "Wang",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "{{flask_url}}/class",
+					"host": [
+						"{{flask_url}}"
+					],
+					"path": [
+						"class"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get-all-classes",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{flask_url}}/class",
+					"host": [
+						"{{flask_url}}"
+					],
+					"path": [
+						"class"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "update-class",
+			"request": {
+				"method": "PUT",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"subject\": \"test\",\n    \"class_number\": 2021,\n    \"semester\": \"SPRING\",\n    \"school_year\": 2022,\n    \"professor\": \"Macarthys\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{flask_url}}/class/2",
+					"host": [
+						"{{flask_url}}"
+					],
+					"path": [
+						"class",
+						"2"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "delete-class",
+			"request": {
+				"method": "DELETE",
+				"header": [],
+				"url": {
+					"raw": "{{flask_url}}/class/1",
+					"host": [
+						"{{flask_url}}"
+					],
+					"path": [
+						"class",
+						"1"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get-student-classes",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{flask_url}}/student/jane@csu.fullerton.edu/classes",
+					"host": [
+						"{{flask_url}}"
+					],
+					"path": [
+						"student",
+						"jane@csu.fullerton.edu",
+						"classes"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "class-enrollment",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": {
+					"raw": "{{flask_url}}/student/jane@csu.fullerton.edu/class/subject/CPSC/class-number/349",
+					"host": [
+						"{{flask_url}}"
+					],
+					"path": [
+						"student",
+						"jane@csu.fullerton.edu",
+						"class",
+						"subject",
+						"CPSC",
+						"class-number",
+						"349"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "drop-class",
+			"request": {
+				"method": "DELETE",
+				"header": [],
+				"url": {
+					"raw": "{{flask_url}}/student/jane@csu.fullerton.edu/class/subject/CPSC/class-number/349",
+					"host": [
+						"{{flask_url}}"
+					],
+					"path": [
+						"student",
+						"jane@csu.fullerton.edu",
+						"class",
+						"subject",
+						"CPSC",
+						"class-number",
+						"349"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "student-search",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{flask_url}}/student/search?semester=FALL",
+					"host": [
+						"{{flask_url}}"
+					],
+					"path": [
+						"student",
+						"search"
+					],
+					"query": [
+						{
+							"key": "email",
+							"value": "jack@csu.fullerton.edu",
+							"disabled": true
+						},
+						{
+							"key": "professor",
+							"value": "Dr. Smith",
+							"disabled": true
+						},
+						{
+							"key": "school_year",
+							"value": "2021",
+							"disabled": true
+						},
+						{
+							"key": "full_name",
+							"value": "John",
+							"disabled": true
+						},
+						{
+							"key": "grad_year",
+							"value": "2022",
+							"disabled": true
+						},
+						{
+							"key": "subject",
+							"value": "CPSC",
+							"disabled": true
+						},
+						{
+							"key": "class_number",
+							"value": "349",
+							"disabled": true
+						},
+						{
+							"key": "semester",
+							"value": "FALL"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "class-search",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{flask_url}}/class/search?semester=FALL",
+					"host": [
+						"{{flask_url}}"
+					],
+					"path": [
+						"class",
+						"search"
+					],
+					"query": [
+						{
+							"key": "subject",
+							"value": "CPSC",
+							"disabled": true
+						},
+						{
+							"key": "class_number",
+							"value": "349",
+							"disabled": true
+						},
+						{
+							"key": "semester",
+							"value": "FALL"
+						},
+						{
+							"key": "school_year",
+							"value": "2022",
+							"disabled": true
+						},
+						{
+							"key": "professor",
+							"value": "Wang",
+							"disabled": true
+						}
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "flask_url",
+			"value": "localhost:5000"
+		}
+	]
+}
