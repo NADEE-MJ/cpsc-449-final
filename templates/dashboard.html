@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  </head>
+  <body>
+    <h1>Dashboard</h1>
+    <p>Welcome, {{ username }}!</p>
+    <div>
+      <button onclick="window.location.href='/student_search'">Search Students</button>
+      <button onclick="window.location.href='/class_search'">Search Classes</button>
+      <button onclick="window.location.href='/account'">My Profile</button>
+    </div>
+    <h2>Your Classes:</h2>
+    <ul>
+      {% for class in classes %}
+      <li>{{ class.subject }} {{ class.class_number }} - {{ class.professor }}</li>
+      {% else %}
+      <li>No classes enrolled.</li>
+      {% endfor %}
+    </ul>
+    <button onclick="logout()">Logout</button>
+  </body>
+  <script>
+    function logout() {
+      // Deletes the token cookie
+      document.cookie = "token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+
+      // Redirects to the login page
+      window.location.href = "/";
+    }
+  </script>
+</html>

@@ -1,0 +1,61 @@
+<!-- templates/class_search.html -->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Class Search</title>
+  </head>
+  <body>
+    <h1>Search for Classes</h1>
+    <form id="searchForm">
+      <label for="subject">Subject:</label>
+      <input type="text" id="subject" name="subject" />
+
+      <label for="class_number">Class Number:</label>
+      <input type="number" id="class_number" name="class_number" />
+
+      <label for="semester">Semester:</label>
+      <input type="text" id="semester" name="semester" />
+
+      <label for="school_year">School Year:</label>
+      <input type="number" id="school_year" name="school_year" />
+
+      <label for="professor">Professor:</label>
+      <input type="text" id="professor" name="professor" />
+
+      <button type="submit">Search</button>
+    </form>
+    <ul id="results"></ul>
+    <script>
+      document.getElementById("searchForm").addEventListener("submit", function (event) {
+        event.preventDefault();
+        const formData = new FormData(this);
+        fetch("/class/search?" + new URLSearchParams(Object.fromEntries(formData)), {
+          method: "GET",
+          headers: { Authorization: `Bearer ${getCookie("token")}` },
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            const resultsElement = document.getElementById("results");
+            resultsElement.innerHTML = ""; // Clear previous results
+            if (data.classes && data.classes.length > 0) {
+              data.classes.forEach((class_) => {
+                const li = document.createElement("li");
+                li.textContent = `${class_.subject} ${class_.class_number} - ${class_.professor}`;
+                resultsElement.appendChild(li);
+              });
+            } else {
+              resultsElement.innerHTML = "<li>No results found.</li>";
+            }
+          });
+
+        function getCookie(name) {
+          return document.cookie
+            .split("; ")
+            .find((row) => row.startsWith(name))
+            .split("=")[1];
+        }
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Account Management</title>
+  </head>
+  <body>
+    <h1>Account Management</h1>
+    <h2>Profile Information</h2>
+    <form id="updateForm">
+      <label for="email">Email (cannot be changed):</label>
+      <input type="email" id="email" name="email" value="{{ email }}" disabled />
+
+      <label for="full_name">Full Name:</label>
+      <input type="text" id="full_name" name="full_name" value="{{ full_name }}" required />
+
+      <label for="grad_year">Graduation Year:</label>
+      <input type="number" id="grad_year" name="grad_year" value="{{ grad_year }}" required />
+
+      <button type="submit">Update Profile</button>
+    </form>
+    <h2>Upload Profile Picture</h2>
+    <form id="uploadForm" enctype="multipart/form-data">
+      <input type="file" name="file" required />
+      <button type="submit">Upload</button>
+    </form>
+    <button onclick="deleteAccount()">Delete Account</button>
+    <script>
+      document.getElementById("updateForm").addEventListener("submit", function (event) {
+        event.preventDefault();
+        const formData = new FormData(this);
+        fetch("/student", {
+          method: "PUT",
+          body: JSON.stringify(Object.fromEntries(formData)),
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${getCookie("token")}`,
+          },
+        })
+          .then((response) => response.json())
+          .then((data) => alert(data.msg));
+
+        function getCookie(name) {
+          let cookieValue = null;
+          if (document.cookie && document.cookie !== "") {
+            const cookies = document.cookie.split(";");
+            for (let i = 0; i < cookies.length; i++) {
+              const cookie = cookies[i].trim();
+              if (cookie.substring(0, name.length + 1) === name + "=") {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+              }
+            }
+          }
+          return cookieValue;
+        }
+      });
+
+      document.getElementById("uploadForm").addEventListener("submit", function (event) {
+        event.preventDefault();
+        const formData = new FormData(this);
+        fetch("/student/upload", {
+          method: "POST",
+          body: formData,
+          headers: { Authorization: `Bearer ${getCookie("token")}` },
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            alert(data.msg);
+            if (data.path) {
+              window.location.reload(); // Reload to show new image
+            }
+          });
+
+        function getCookie(name) {
+          return document.cookie
+            .split("; ")
+            .find((row) => row.startsWith(name))
+            .split("=")[1];
+        }
+      });
+
+      function deleteAccount() {
+        if (
+          confirm("Are you sure you want to delete your account? This action cannot be undone!")
+        ) {
+          fetch("/student", {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${getCookie("token")}` },
+          })
+            .then((response) => response.json())
+            .then((data) => {
+              alert(data.msg);
+              if (response.status === 200) {
+                window.location.href = "/login";
+              }
+            });
+
+          function getCookie(name) {
+            return document.cookie
+              .split("; ")
+              .find((row) => row.startsWith(name))
+              .split("=")[1];
+          }
+        }
+      }
+    </script>
+  </body>
+</html>

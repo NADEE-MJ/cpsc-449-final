@@ -1,5 +1,19 @@
-from flask import Flask, request, make_response, redirect, url_for
+import jwt
+import os
+import datetime
+from functools import wraps
+from flask import (
+    Flask,
+    request,
+    make_response,
+    redirect,
+    url_for,
+    send_from_directory,
+    render_template,
+)
 from flask_pymongo import PyMongo, ObjectId
+from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash, check_password_hash
 
 """
 Description: This project will act as a way to connect students (previous, current, or future) to track the classes they have taken.
@@ -9,13 +23,18 @@ Users may also search for other individuals who have taken / will take a given c
 """
 
 app = Flask(__name__)
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "my_precious_secret_key")
 app.config["MONGO_URI"] = (
     "mongodb://admin:password@127.0.0.1:27017/main?authSource=admin"
 )
+app.config["UPLOAD_EXTENSIONS"] = [".jpg", ".png", ".gif"]
+app.config["UPLOAD_PATH"] = "uploads"
 mongo = PyMongo(app)
 
+os.makedirs(app.config["UPLOAD_PATH"], exist_ok=True)
 
-def response(data, status_code=200):
+
+def response(data, status_code=200, headers=None):
     """
     Helper function to create a response with the correct headers
 
@@ -26,9 +45,37 @@ def response(data, status_code=200):
     Returns:
         Response: The response object
     """
-    response = make_response(data, status_code)
-    response.headers["Content-Type"] = "application/json"
-    return response
+    res = make_response(data, status_code)
+    res.headers["Content-Type"] = "application/json"
+
+    if headers:
+        for key, value in headers.items():
+            res.headers[key] = value
+    return res
+
+
+def token_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = request.cookies.get("token")
+        if not token:
+            return response({"msg": "Token is missing!"}, 401)
+        try:
+            data = jwt.decode(token, app.config["SECRET_KEY"], algorithms=["HS256"])
+            current_user = mongo.db.students.find_one(
+                {"_id": ObjectId(data["user_id"])}
+            )
+        except:
+            return response({"msg": "Token is invalid!"}, 401)
+
+        if not current_user:
+            return response({"msg": "User not found!"}, 404)
+
+        kwargs["current_user"] = current_user
+
+        return f(*args, **kwargs)
+
+    return decorated
 
 
 ###########################################
@@ -60,21 +107,25 @@ def initialize_db():
 @app.route("/seed-db", methods=["POST"])
 def seed_db():
     initialize_db()
+    password = generate_password_hash("password")
     students = [
         {
             "email": "john@csu.fullerton.edu",
             "full_name": "John Smith",
             "grad_year": 2023,
+            "password": password,
         },
         {
             "email": "jane@csu.fullerton.edu",
             "full_name": "Jane Smith",
             "grad_year": 2022,
+            "password": password,
         },
         {
             "email": "jack@csu.fullerton.edu",
             "full_name": "Jack Smith",
             "grad_year": 2021,
+            "password": password,
         },
     ]
     # Inserting students and obtaining inserted_ids for further reference
@@ -121,12 +172,109 @@ def index():
 
 @app.route("/home", methods=["GET"])
 def home():
-    return redirect(url_for("get_all_classes"))
+    # Attempt to get the token from cookies
+    token = request.cookies.get("token")
+    if token:
+        try:
+            # Validate token and redirect to dashboard if valid
+            jwt.decode(token, app.config["SECRET_KEY"], algorithms=["HS256"])
+            return redirect(url_for("dashboard"))
+        except jwt.ExpiredSignatureError:
+            pass  # Token is expired, fall through to show login
+        except jwt.InvalidTokenError:
+            pass  # Token is invalid, fall through to show login
+
+    # If no valid token, render the login page
+    return render_template("login.html")
+
+
+@app.route("/signup", methods=["GET"])
+def signup():
+    return render_template("signup.html")
+
+
+@app.route("/dashboard", methods=["GET"])
+@token_required
+def dashboard(current_user):
+    classes = list(
+        mongo.db.enrollments.find({"student_id": ObjectId(current_user["_id"])})
+    )
+    class_details = [
+        mongo.db.classes.find_one({"_id": class_["class_id"]}) for class_ in classes
+    ]
+    return render_template(
+        "dashboard.html", username=current_user["full_name"], classes=class_details
+    )
+
+
+@app.route("/student-search", methods=["GET"])
+@token_required
+def student_search_page(current_user):
+    return render_template("student_search.html")
+
+
+@app.route("/class-search", methods=["GET"])
+@token_required
+def class_search_page(current_user):
+    return render_template("class_search.html")
+
+
+@app.route("/account", methods=["GET"])
+@token_required
+def account(current_user):
+    return render_template(
+        "account.html",
+        email=current_user["email"],
+        full_name=current_user["full_name"],
+        grad_year=current_user["grad_year"],
+    )
 
 
 @app.route("/login", methods=["POST"])
 def login():
-    return redirect(url_for("index"))
+    request_data = request.get_json()
+    if not request_data:
+        return response(
+            {"msg": "No data provided!"},
+            400,
+            headers={"WWW-Authenticate": 'Basic realm="Login required!"'},
+        )
+
+    email = request_data.get("email")
+    password = request_data.get("password")
+    if not email or not password:
+        return response(
+            {"msg": "Fields Missing!"},
+            400,
+            headers={"WWW-Authenticate": 'Basic realm="Login required!"'},
+        )
+
+    student = mongo.db.students.find_one({"email": email})
+    if not student:
+        return response(
+            {"msg": "Student Not Found!"},
+            404,
+            headers={"WWW-Authenticate": 'Basic realm="Login required!"'},
+        )
+
+    if not check_password_hash(student["password"], password):
+        return response(
+            {"msg": "Invalid Credentials!"},
+            401,
+            headers={"WWW-Authenticate": 'Basic realm="Login required!"'},
+        )
+
+    token = jwt.encode(
+        {
+            "user_id": str(student["_id"]),
+            "exp": datetime.datetime.now(tz=datetime.UTC)
+            + datetime.timedelta(hours=24),
+        },
+        app.config["SECRET_KEY"],
+    )
+    res = response({"token": token}, 200)
+    res.set_cookie("token", token, httponly=True)
+    return res
 
 
 ###########################################
@@ -136,13 +284,14 @@ def login():
 def create_student():
     students = mongo.db.students
 
-    fields = ["email", "full_name", "grad_year"]
+    fields = ["email", "full_name", "grad_year", "password"]
     for field in fields:
         if field not in request.form:
             return response({"msg": "Fields Missing!"}, 400)
     email = request.form["email"]
     full_name = request.form["full_name"]
     grad_year = request.form["grad_year"]
+    password = request.form["password"]
 
     # grad year should be an int
     try:
@@ -150,33 +299,48 @@ def create_student():
     except:
         return response({"msg": "Grad Year must be an integer!"}, 400)
 
-    if email and full_name and grad_year:
+    if email and full_name and grad_year and password:
         if students.find_one({"email": email}):
             return response({"msg": "A student with that email already exists"}, 409)
 
+        password = generate_password_hash(password)
+
         students.insert_one(
-            {"email": email, "full_name": full_name, "grad_year": grad_year}
+            {
+                "email": email,
+                "full_name": full_name,
+                "grad_year": grad_year,
+                "password": password,
+            }
         )
         student = students.find_one({"email": email})
         student["_id"] = str(student["_id"])
+        del student["password"]
 
     else:
         return response({"msg": "Fields Empty!"}, 400)
     return response({"msg": "Student Created!", "student": student}, 201)
 
 
-@app.route("/student/<string:email>", methods=["GET"])
-def get_student(email):
-    student = mongo.db.students.find_one({"email": email})
+@app.route("/student/<string:id>", methods=["GET"])
+@token_required
+def get_student(id: str, current_user: dict):
+    if not ObjectId.is_valid(id):
+        return response({"msg": "Invalid ID!"}, 400)
+    id = ObjectId(id)
+    student = mongo.db.students.find_one({"_id": id})
     if not student:
         return response({"msg": "Student Not Found!"}, 404)
 
     student["_id"] = str(student["_id"])
+    del student["password"]
+
     return response({"student": student})
 
 
 @app.route("/student/class/<string:id>", methods=["GET"])
-def get_students_by_enrollments_in_class(id: str):
+@token_required
+def get_students_by_enrollments_in_class(id: str, current_user: dict):
     if not ObjectId.is_valid(id):
         return response({"msg": "Invalid ID!"}, 400)
     id = ObjectId(id)
@@ -192,20 +356,22 @@ def get_students_by_enrollments_in_class(id: str):
 
     for student in students:
         student["_id"] = str(student["_id"])
+        del student["password"]
 
     class_["_id"] = str(class_["_id"])
 
     return response({"class": class_, "students": students})
 
 
-@app.route("/student/<string:email>", methods=["PUT"])
-def update_student(email):
+@app.route("/student", methods=["PUT"])
+@token_required
+def update_student(current_user: dict):
     try:
         request_data = request.get_json()
     except:
         return response({"msg": "No data provided!"}, 400)
 
-    student = mongo.db.students.find_one({"email": email})
+    student = mongo.db.students.find_one({"_id": current_user["_id"]})
     if not student:
         return response({"msg": "Student Not Found!"}, 404)
 
@@ -216,28 +382,97 @@ def update_student(email):
     if len(updated_data) == 0:
         return response({"msg": "Fields Missing!"}, 400)
 
-    result = mongo.db.students.update_one({"email": email}, {"$set": updated_data})
+    result = mongo.db.students.update_one(
+        {"_id": current_user["_id"]}, {"$set": updated_data}
+    )
     if result.modified_count == 0:
         return response({"msg": "No changes were made"}, 200)
 
-    student = mongo.db.students.find_one({"email": email})
+    student = mongo.db.students.find_one({"_id": current_user["_id"]})
     student["_id"] = str(student["_id"])
+    del student["password"]
+
     return response({"msg": "Student Updated!", "student": student})
 
 
-@app.route("/student/<string:email>", methods=["DELETE"])
-def delete_student(email):
-    result = mongo.db.students.delete_one({"email": email})
+@app.route("/student", methods=["DELETE"])
+@token_required
+def delete_student(current_user: dict):
+    result = mongo.db.students.delete_one({"email": current_user["email"]})
     if result.deleted_count == 0:
         return response({"msg": "Student Not Found!"}, 404)
+
+    mongo.db.enrollments.delete_many({"student_id": current_user["_id"]})
     return response({"msg": "Student Deleted!"}, 200)
+
+
+###########################################
+# ? FILE HANDLING
+###########################################
+@app.route("/student/upload", methods=["POST"])
+@token_required
+def upload_student_image(current_user: dict):
+    try:
+        uploaded_files = request.files
+    except:
+        return response({"msg": "No file provided!"}, 400)
+
+    if "file" not in uploaded_files:
+        return response({"msg": "No file provided!"}, 400)
+
+    if len(uploaded_files) > 1:
+        return response({"msg": "Only one file can be uploaded!"}, 400)
+
+    uploaded_file = request.files["file"]
+
+    if not uploaded_file:
+        return response({"msg": "No file provided!"}, 400)
+
+    filename = secure_filename(uploaded_file.filename)
+    if filename != "":
+        file_ext = os.path.splitext(filename)[1].lower()
+        if file_ext not in app.config["UPLOAD_EXTENSIONS"]:
+            return response({"msg": "Invalid file extension!"}, 400)
+
+        file_path = os.path.join(
+            app.config["UPLOAD_PATH"], f"{str(current_user['_id'])}{file_ext}"
+        )
+        uploaded_file.save(file_path)
+
+        mongo.db.students.update_one(
+            {"_id": current_user["_id"]}, {"$set": {"image_path": file_path}}
+        )
+
+        return response({"msg": "File uploaded successfully!", "path": file_path})
+    else:
+        return response({"msg": "Invalid file name!"}, 400)
+
+
+@app.route("/student/<string:id>/image", methods=["GET"])
+@token_required
+def get_student_image(id: str, current_user: dict):
+    if not ObjectId.is_valid(id):
+        return response({"msg": "Invalid ID!"}, 400)
+    id = ObjectId(id)
+    student = mongo.db.students.find_one({"_id": id})
+    if not student:
+        return response({"msg": "Student not found!"}, 404)
+
+    if "image_path" in student and os.path.exists(student["image_path"]):
+        return send_from_directory(
+            os.path.dirname(student["image_path"]),
+            os.path.basename(student["image_path"]),
+        )
+    else:
+        return response({"msg": "No image found for this student."}, 404)
 
 
 ##########################################
 # ? CLASS CRUD
 ##########################################
 @app.route("/class", methods=["POST"])
-def create_class():
+@token_required
+def create_class(current_user: dict):
     classes = mongo.db.classes
 
     fields = ["subject", "class_number", "semester", "school_year", "professor"]
@@ -289,7 +524,8 @@ def create_class():
 
 
 @app.route("/class", methods=["GET"])
-def get_all_classes():
+@token_required
+def get_all_classes(current_user: dict):
     classes = list(mongo.db.classes.find({}))
     for class_ in classes:
         class_["_id"] = str(class_["_id"])
@@ -297,7 +533,8 @@ def get_all_classes():
 
 
 @app.route("/class/<string:id>", methods=["PUT"])
-def update_class(id: str):
+@token_required
+def update_class(id: str, current_user: dict):
     try:
         request_data = request.get_json()
     except:
@@ -348,7 +585,8 @@ def update_class(id: str):
 
 
 @app.route("/class/<string:id>", methods=["DELETE"])
-def delete_class(id: str):
+@token_required
+def delete_class(id: str, current_user: dict):
     if not ObjectId.is_valid(id):
         return response({"msg": "Invalid ID!"}, 400)
     id = ObjectId(id)
@@ -356,15 +594,21 @@ def delete_class(id: str):
     result = mongo.db.classes.delete_one({"_id": id})
     if result.deleted_count == 0:
         return response({"msg": "Class Not Found!"}, 404)
+
+    mongo.db.enrollments.delete_many({"class_id": id})
     return response({"msg": "Class Deleted!"}, 200)
 
 
 ###########################################
 # ? Search / Enroll / Drop
 ###########################################
-@app.route("/student/<string:email>/classes", methods=["GET"])
-def get_student_classes(email: str):
-    student = mongo.db.students.find_one({"email": email})
+@app.route("/student/<string:id>/classes", methods=["GET"])
+@token_required
+def get_student_classes(id: str, current_user: dict):
+    if not ObjectId.is_valid(id):
+        return response({"msg": "Invalid ID!"}, 400)
+    id = ObjectId(id)
+    student = mongo.db.students.find_one({"_id": id})
     if not student:
         return response({"msg": "Student Not Found!"}, 404)
 
@@ -384,11 +628,12 @@ def get_student_classes(email: str):
 
 
 @app.route(
-    "/student/<string:email>/class/<string:id>",
+    "/student/class/<string:id>",
     methods=["POST"],
 )
-def class_enrollment(email: str, id: str):
-    student = mongo.db.students.find_one({"email": email})
+@token_required
+def class_enrollment(id: str, current_user: dict):
+    student = mongo.db.students.find_one({"_id": current_user["_id"]})
     if not student:
         return response({"msg": "Student Not Found!"}, 404)
 
@@ -413,11 +658,12 @@ def class_enrollment(email: str, id: str):
 
 
 @app.route(
-    "/student/<string:email>/class/<string:id>",
+    "/student/class/<string:id>",
     methods=["DELETE"],
 )
-def class_drop(email: str, id: str):
-    student = mongo.db.students.find_one({"email": email})
+@token_required
+def class_drop(id: str, current_user: dict):
+    student = mongo.db.students.find_one({"_id": current_user["_id"]})
     if not student:
         return response({"msg": "Student Not Found!"}, 404)
 
@@ -443,7 +689,8 @@ def class_drop(email: str, id: str):
 
 
 @app.route("/student/search", methods=["GET"])
-def student_search():
+@token_required
+def student_search(current_user: dict):
     search_params = {
         "email": request.args.get("email"),
         "full_name": request.args.get("full_name"),
@@ -516,6 +763,7 @@ def student_search():
                 "email": 1,
                 "full_name": 1,
                 "grad_year": 1,
+                "password": 0,
                 "classes": 1,
             }
         },
@@ -534,7 +782,8 @@ def student_search():
 
 
 @app.route("/class/search", methods=["GET"])
-def class_search():
+@token_required
+def class_search(current_user: dict):
     search_params = {
         "subject": request.args.get("subject"),
         "class_number": request.args.get("class_number"),
