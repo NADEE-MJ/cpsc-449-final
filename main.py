@@ -1,5 +1,5 @@
 from flask import Flask, request, make_response, redirect, url_for
-from flask_pymongo import PyMongo
+from flask_pymongo import PyMongo, ObjectId
 
 """
 Description: This project will act as a way to connect students (previous, current, or future) to track the classes they have taken.
@@ -116,6 +116,11 @@ def seed_db():
 # ! NOT IMPLEMENTED
 @app.route("/", methods=["GET"])
 def index():
+    return redirect(url_for("home"))
+
+
+@app.route("/home", methods=["GET"])
+def home():
     return redirect(url_for("get_all_classes"))
 
 
@@ -147,7 +152,7 @@ def create_student():
 
     if email and full_name and grad_year:
         if students.find_one({"email": email}):
-            res = response({"msg": "A student with that email already exists"}, 409)
+            return response({"msg": "A student with that email already exists"}, 409)
 
         students.insert_one(
             {"email": email, "full_name": full_name, "grad_year": grad_year}
@@ -172,6 +177,9 @@ def get_student(email):
 
 @app.route("/student/class/<string:id>", methods=["GET"])
 def get_students_by_enrollments_in_class(id: str):
+    if not ObjectId.is_valid(id):
+        return response({"msg": "Invalid ID!"}, 400)
+    id = ObjectId(id)
     class_ = mongo.db.classes.find_one({"_id": id})
     if not class_:
         return response({"msg": "Class Not Found!"}, 404)
@@ -184,6 +192,8 @@ def get_students_by_enrollments_in_class(id: str):
 
     for student in students:
         student["_id"] = str(student["_id"])
+
+    class_["_id"] = str(class_["_id"])
 
     return response({"class": class_, "students": students})
 
@@ -208,9 +218,10 @@ def update_student(email):
 
     result = mongo.db.students.update_one({"email": email}, {"$set": updated_data})
     if result.modified_count == 0:
-        return response({"msg": "No changes were made or student not found"}, 400)
+        return response({"msg": "No changes were made"}, 200)
 
     student = mongo.db.students.find_one({"email": email})
+    student["_id"] = str(student["_id"])
     return response({"msg": "Student Updated!", "student": student})
 
 
@@ -272,7 +283,9 @@ def create_class():
         return response({"msg": "A class with that information already exists"}, 409)
 
     class_id = classes.insert_one(data).inserted_id
-    return response({"msg": "Class Created!", "class_id": str(class_id)}, 201)
+    class_ = classes.find_one({"_id": class_id})
+    class_["_id"] = str(class_["_id"])
+    return response({"msg": "Class Created!", "class": class_}, 201)
 
 
 @app.route("/class", methods=["GET"])
@@ -288,9 +301,13 @@ def update_class(id: str):
     try:
         request_data = request.get_json()
     except:
-        return response({"msg: No Data Recieved!"}, 400)
+        return response({"msg": "No Data Received!"}, 400)
 
     classes = mongo.db.classes
+    if not ObjectId.is_valid(id):
+        return response({"msg": "Invalid ID!"}, 400)
+
+    id = ObjectId(id)
     class_ = classes.find_one({"_id": id})
 
     if not class_:
@@ -323,14 +340,19 @@ def update_class(id: str):
         return response({"msg": "A class with that information already exists!"}, 400)
 
     if result.modified_count == 0:
-        return response({"msg": "No changes were made"}, 400)
+        return response({"msg": "No changes were made"}, 200)
 
     class_ = classes.find_one({"_id": id})
+    class_["_id"] = str(class_["_id"])
     return response({"msg": "Class Updated!", "class": class_})
 
 
-@app.route("class/<string:id>", methods=["DELETE"])
+@app.route("/class/<string:id>", methods=["DELETE"])
 def delete_class(id: str):
+    if not ObjectId.is_valid(id):
+        return response({"msg": "Invalid ID!"}, 400)
+    id = ObjectId(id)
+
     result = mongo.db.classes.delete_one({"_id": id})
     if result.deleted_count == 0:
         return response({"msg": "Class Not Found!"}, 404)
@@ -370,6 +392,10 @@ def class_enrollment(email: str, id: str):
     if not student:
         return response({"msg": "Student Not Found!"}, 404)
 
+    if not ObjectId.is_valid(id):
+        return response({"msg": "Invalid ID!"}, 400)
+    id = ObjectId(id)
+
     class_ = mongo.db.classes.find_one({"_id": id})
     if not class_:
         return response({"msg": "Class Not Found!"})
@@ -380,27 +406,26 @@ def class_enrollment(email: str, id: str):
     if enrollment:
         return response({"msg": "Student Already Enrolled in Class!"}, 400)
 
-    result = mongo.db.enrollments.insert_one(
+    mongo.db.enrollments.insert_one(
         {"student_id": student["_id"], "class_id": class_["_id"]}
     )
-    if result.inserted_id:
-        return response({"msg": "Class Registered!"}, 201)
-
-    return response({"msg": "Error Registering for Class!"}, 400)
+    return response({"msg": "Class Registered!"}, 201)
 
 
 @app.route(
     "/student/<string:email>/class/<string:id>",
     methods=["DELETE"],
 )
-def class_drop(email: str, subject: str, class_number: str):
+def class_drop(email: str, id: str):
     student = mongo.db.students.find_one({"email": email})
     if not student:
         return response({"msg": "Student Not Found!"}, 404)
 
-    class_ = mongo.db.classes.find_one(
-        {"subject": subject, "class_number": class_number}
-    )
+    if not ObjectId.is_valid(id):
+        return response({"msg": "Invalid ID!"}, 400)
+    id = ObjectId(id)
+
+    class_ = mongo.db.classes.find_one({"_id": id})
     if not class_:
         return response({"msg": "Class Not Found!"}, 404)
 
@@ -411,21 +436,18 @@ def class_drop(email: str, subject: str, class_number: str):
     if not enrollment:
         return response({"msg": "Student Not Enrolled in Class!"}, 400)
 
-    result = mongo.db.enrollments.delete_one(
+    mongo.db.enrollments.delete_one(
         {"student_id": student["_id"], "class_id": class_["_id"]}
     )
-    if result.deleted_count == 0:
-        return response({"msg": "Error Dropping Class!"}, 400)
-
     return response({"msg": "Class Dropped!"}, 200)
 
 
 @app.route("/student/search", methods=["GET"])
 def student_search():
     search_params = {
-        "students.email": request.args.get("email"),
-        "students.full_name": request.args.get("full_name"),
-        "students.grad_year": request.args.get("grad_year"),
+        "email": request.args.get("email"),
+        "full_name": request.args.get("full_name"),
+        "grad_year": request.args.get("grad_year"),
         "classes.subject": request.args.get("subject"),
         "classes.class_number": request.args.get("class_number"),
         "classes.semester": request.args.get("semester"),
@@ -436,56 +458,65 @@ def student_search():
     # Remove None values from search parameters
     query = {k: v for k, v in search_params.items() if v is not None}
 
-    # Convert numbers to integers where necessary
-    if "students.grad_year" in query:
-        try:
-            query["students.grad_year"] = int(query["students.grad_year"])
-        except ValueError:
-            return response({"msg": "Grad Year must be an integer!"}, 400)
-    if "classes.class_number" in query:
-        try:
-            query["classes.class_number"] = int(query["classes.class_number"])
-        except ValueError:
-            return response({"msg": "Class Number must be an integer!"}, 400)
-    if "classes.school_year" in query:
-        try:
-            query["classes.school_year"] = int(query["classes.school_year"])
-        except ValueError:
-            return response({"msg": "School Year must be an integer!"}, 400)
+    # Convert numeric values from strings to integers
+    numeric_fields = ["grad_year", "classes.class_number", "classes.school_year"]
+    for field in numeric_fields:
+        if field in query:
+            try:
+                query[field] = int(query[field])
+            except ValueError:
+                return response(
+                    {
+                        "msg": f"{field.split('.')[-1].replace('_', ' ').title()} must be an integer!"
+                    },
+                    400,
+                )
 
-    # Perform a lookup/aggregation to join collections and match conditions
+    # Adjust the aggregation pipeline
     pipeline = [
         {
             "$lookup": {
                 "from": "enrollments",
                 "localField": "_id",
                 "foreignField": "student_id",
-                "as": "enrollments",
+                "as": "enrollment_data",
             }
         },
-        {"$unwind": "$enrollments"},
+        {"$unwind": {"path": "$enrollment_data", "preserveNullAndEmptyArrays": True}},
         {
             "$lookup": {
                 "from": "classes",
-                "localField": "enrollments.class_id",
+                "localField": "enrollment_data.class_id",
                 "foreignField": "_id",
-                "as": "classes",
+                "as": "class_info",
             }
         },
-        {"$unwind": "$classes"},
+        {"$unwind": {"path": "$class_info", "preserveNullAndEmptyArrays": True}},
         {"$match": query},
         {
+            "$group": {
+                "_id": "$_id",
+                "email": {"$first": "$email"},
+                "full_name": {"$first": "$full_name"},
+                "grad_year": {"$first": "$grad_year"},
+                "classes": {
+                    "$push": {
+                        "$cond": [
+                            {"$eq": ["$class_info", None]},
+                            "$$REMOVE",
+                            "$class_info",
+                        ]
+                    }
+                },
+            }
+        },
+        {
             "$project": {
+                "_id": 1,
                 "email": 1,
                 "full_name": 1,
                 "grad_year": 1,
-                "classes": {
-                    "subject": 1,
-                    "class_number": 1,
-                    "semester": 1,
-                    "school_year": 1,
-                    "professor": 1,
-                },
+                "classes": 1,
             }
         },
     ]
@@ -494,11 +525,10 @@ def student_search():
     if not results:
         return response({"msg": "No Results Found!", "students": []}, 404)
 
-    # Transform results to make them more readable
+    # Convert ObjectId to string for output
     for student in results:
         student["_id"] = str(student["_id"])
-        if "classes" in student:
-            student["classes"]["_id"] = str(student["classes"]["_id"])
+        student["classes"] = [{**c, "_id": str(c["_id"])} for c in student["classes"]]
 
     return response({"msg": "Query Successful!", "students": results})
 
