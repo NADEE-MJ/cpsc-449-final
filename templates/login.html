@@ -19,7 +19,7 @@
       document.getElementById("loginForm").addEventListener("submit", function (event) {
         event.preventDefault();
         const formData = new FormData(this);
-        fetch(this.action, {
+        fetch("/login", {
           method: "POST",
           body: JSON.stringify(Object.fromEntries(formData)),
           headers: { "Content-Type": "application/json" },

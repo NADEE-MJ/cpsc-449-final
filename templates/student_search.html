@@ -29,7 +29,9 @@
           method: "GET",
           headers: { Authorization: `Bearer ${getCookie("token")}` },
         })
-          .then((response) => response.json())
+          .then((response) => 
+              response.json()
+          )
           .then((data) => {
             const resultsElement = document.getElementById("results");
             resultsElement.innerHTML = ""; // Clear previous results
@@ -42,14 +44,17 @@
             } else {
               resultsElement.innerHTML = "<li>No results found.</li>";
             }
+          })
+          .catch((error) => {
+            console.log("Error:", error);
           });
 
-        function getCookie(name) {
-          return document.cookie
-            .split("; ")
-            .find((row) => row.startsWith(name))
-            .split("=")[1];
-        }
+          function getCookie(name) {
+            const cookieString = document.cookie
+              .split("; ")
+              .find((row) => row.startsWith(name));
+            return cookieString ? cookieString.split("=")[1] : null;
+          }
       });
     </script>
   </body>

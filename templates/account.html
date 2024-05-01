@@ -73,10 +73,10 @@
           });
 
         function getCookie(name) {
-          return document.cookie
+          const cookieString = document.cookie
             .split("; ")
-            .find((row) => row.startsWith(name))
-            .split("=")[1];
+            .find((row) => row.startsWith(name));
+          return cookieString ? cookieString.split("=")[1] : null;
         }
       });
 
@@ -96,14 +96,14 @@
               }
             });
 
-          function getCookie(name) {
-            return document.cookie
-              .split("; ")
-              .find((row) => row.startsWith(name))
-              .split("=")[1];
+            function getCookie(name) {
+              const cookieString = document.cookie
+                .split("; ")
+                .find((row) => row.startsWith(name));
+              return cookieString ? cookieString.split("=")[1] : null;
+            }
           }
         }
-      }
     </script>
   </body>
 </html>

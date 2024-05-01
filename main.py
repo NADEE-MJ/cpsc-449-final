@@ -1,6 +1,6 @@
 import jwt
 import os
-import datetime
+from datetime import datetime, timezone, timedelta
 from functools import wraps
 from flask import (
     Flask,
@@ -190,7 +190,7 @@ def home():
 
 @app.route("/signup", methods=["GET"])
 def signup():
-    return render_template("signup.html")
+    return render_template("login.html")
 
 
 @app.route("/dashboard", methods=["GET"])
@@ -267,8 +267,8 @@ def login():
     token = jwt.encode(
         {
             "user_id": str(student["_id"]),
-            "exp": datetime.datetime.now(tz=datetime.UTC)
-            + datetime.timedelta(hours=24),
+            "exp": datetime.now(tz=timezone.utc)
+            + timedelta(hours=24),
         },
         app.config["SECRET_KEY"],
     )
@@ -283,10 +283,10 @@ def login():
 @app.route("/student", methods=["POST"])
 def create_student():
     students = mongo.db.students
-
     fields = ["email", "full_name", "grad_year", "password"]
     for field in fields:
-        if field not in request.form:
+        if request.form.get(field) is None:
+            print(field)
             return response({"msg": "Fields Missing!"}, 400)
     email = request.form["email"]
     full_name = request.form["full_name"]
@@ -379,6 +379,11 @@ def update_student(current_user: dict):
         k: v for k, v in request_data.items() if k in ["full_name", "grad_year"]
     }
 
+    if updated_data.get("grad_year") is not None:
+        try:
+            updated_data["grad_year"] = int(updated_data["grad_year"])
+        except:
+            return response({"msg": "Grad Year must be an integer!"}, 400)
     if len(updated_data) == 0:
         return response({"msg": "Fields Missing!"}, 400)
 
@@ -691,7 +696,7 @@ def class_drop(id: str, current_user: dict):
 @app.route("/student/search", methods=["GET"])
 @token_required
 def student_search(current_user: dict):
-    search_params = {
+    search_params_order = {
         "email": request.args.get("email"),
         "full_name": request.args.get("full_name"),
         "grad_year": request.args.get("grad_year"),
@@ -701,6 +706,15 @@ def student_search(current_user: dict):
         "classes.school_year": request.args.get("school_year"),
         "classes.professor": request.args.get("professor"),
     }
+
+    # Find the first non-None search parameter
+    search_param = next((param for param in search_params_order if request.args.get(param) is not None and request.args.get(param) != ""), None)
+
+    # If a search parameter was found, create the search_params dictionary with only that parameter
+    if search_param:
+        search_params = {search_param: request.args.get(search_param)}
+    else:
+        return response({"msg": "No search parameters provided!"}, 404)
 
     # Remove None values from search parameters
     query = {k: v for k, v in search_params.items() if v is not None}
@@ -763,7 +777,6 @@ def student_search(current_user: dict):
                 "email": 1,
                 "full_name": 1,
                 "grad_year": 1,
-                "password": 0,
                 "classes": 1,
             }
         },
@@ -793,7 +806,7 @@ def class_search(current_user: dict):
     }
 
     # Remove None values from search parameters
-    query = {k: v for k, v in search_params.items() if v is not None}
+    query = {k: v for k, v in search_params.items() if v is not None and v != ""}
 
     # Convert numbers to integers where necessary
     if "class_number" in query:
