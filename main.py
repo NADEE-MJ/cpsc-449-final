@@ -190,7 +190,7 @@ def home():
 
 @app.route("/signup", methods=["GET"])
 def signup():
-    return render_template("login.html")
+    return render_template("signup.html")
 
 
 @app.route("/dashboard", methods=["GET"])
@@ -267,8 +267,7 @@ def login():
     token = jwt.encode(
         {
             "user_id": str(student["_id"]),
-            "exp": datetime.now(tz=timezone.utc)
-            + timedelta(hours=24),
+            "exp": datetime.now(tz=timezone.utc) + timedelta(hours=24),
         },
         app.config["SECRET_KEY"],
     )
@@ -708,7 +707,14 @@ def student_search(current_user: dict):
     }
 
     # Find the first non-None search parameter
-    search_param = next((param for param in search_params_order if request.args.get(param) is not None and request.args.get(param) != ""), None)
+    search_param = next(
+        (
+            param
+            for param in search_params_order
+            if request.args.get(param) is not None and request.args.get(param) != ""
+        ),
+        None,
+    )
 
     # If a search parameter was found, create the search_params dictionary with only that parameter
     if search_param:
