@@ -207,16 +207,10 @@ def dashboard(current_user):
     )
 
 
-@app.route("/student-search", methods=["GET"])
+@app.route("/search", methods=["GET"])
 @token_required
-def student_search_page(current_user):
-    return render_template("student_search.html")
-
-
-@app.route("/class-search", methods=["GET"])
-@token_required
-def class_search_page(current_user):
-    return render_template("class_search.html")
+def search_page(current_user):
+    return render_template("search.html")
 
 
 @app.route("/account", methods=["GET"])
