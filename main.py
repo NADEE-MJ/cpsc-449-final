@@ -170,6 +170,11 @@ def index():
     return redirect(url_for("home"))
 
 
+@app.route("/login", methods=["GET"])
+def login_page():
+    return redirect(url_for("home"))
+
+
 @app.route("/home", methods=["GET"])
 def home():
     # Attempt to get the token from cookies
@@ -203,10 +208,10 @@ def dashboard(current_user):
         mongo.db.classes.find_one({"_id": class_["class_id"]}) for class_ in classes
     ]
     return render_template(
-        "dashboard.html", 
-        username=current_user["full_name"], 
-        userimg = url_for("get_student_image", id=current_user["_id"]),
-        classes=class_details
+        "dashboard.html",
+        username=current_user["full_name"],
+        userimg=url_for("get_student_image", id=current_user["_id"]),
+        classes=class_details,
     )
 
 
@@ -234,7 +239,6 @@ def login():
         return response(
             {"msg": "No data provided!"},
             400,
-            headers={"WWW-Authenticate": 'Basic realm="Login required!"'},
         )
 
     email = request_data.get("email")
@@ -243,7 +247,6 @@ def login():
         return response(
             {"msg": "Fields Missing!"},
             400,
-            headers={"WWW-Authenticate": 'Basic realm="Login required!"'},
         )
 
     student = mongo.db.students.find_one({"email": email})
@@ -251,14 +254,12 @@ def login():
         return response(
             {"msg": "Student Not Found!"},
             404,
-            headers={"WWW-Authenticate": 'Basic realm="Login required!"'},
         )
 
     if not check_password_hash(student["password"], password):
         return response(
             {"msg": "Invalid Credentials!"},
             401,
-            headers={"WWW-Authenticate": 'Basic realm="Login required!"'},
         )
 
     token = jwt.encode(
@@ -271,9 +272,9 @@ def login():
     res = make_response(redirect(url_for("dashboard")))
     res.set_cookie("token", token, httponly=True)
     return res
-    
 
-@app.route("/logout", methods=["GET"])
+
+@app.route("/logout", methods=["POST"])
 def logout():
     res = make_response(redirect(url_for("home")))
     res.set_cookie("token", "", expires=0)
@@ -814,7 +815,6 @@ def class_search(current_user: dict):
         "school_year": request.args.get("school_year"),
         "professor": request.args.get("professor"),
     }
-    
 
     # Remove None values from search parameters
     query = {k: v for k, v in search_params.items() if v is not None and v != ""}
