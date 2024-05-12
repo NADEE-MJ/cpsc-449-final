@@ -22,7 +22,7 @@
       });
 
       function fetchClasses() {
-        fetch("/api/classes")
+        fetch("/class")
           .then((response) => response.json())
           .then((data) => {
             const classList = document.getElementById("classList");

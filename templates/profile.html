@@ -24,19 +24,24 @@
     <script>
       const studentId = new URLSearchParams(window.location.search).get("id");
 
-      document.addEventListener("DOMContentLoaded", function () {
-        fetch(`/api/student/${studentId}`)
-          .then((response) => response.json())
-          .then((data) => {
-            const studentInfo = document.getElementById("studentInfo");
-            studentInfo.innerHTML = `
-                        <h3>${data.full_name}</h3>
-                        <p><strong>Email:</strong> ${data.email}</p>
-                        <p><strong>Graduation Year:</strong> ${data.grad_year}</p>
-                        <img src="${data.profile_picture_url}" alt="Profile Picture" class="img-fluid rounded-circle">
-                    `;
-          })
-          .catch((error) => console.error("Failed to fetch student details:", error));
+      document.addEventListener("DOMContentLoaded", async function () {
+        try {
+          const res = fetch(`/student/${studentId}`);
+          const data = await res.json();
+
+          const studentInfo = document.getElementById("studentInfo");
+
+          studentInfo.innerHTML = `
+            <h3>${data.full_name}</h3>
+            <p><strong>Email:</strong> ${data.email}</p>
+            <p><strong>Graduation Year:</strong> ${data.grad_year}</p>
+            <img src="${data.profile_picture_url}" alt="Profile Picture" class="img-fluid rounded-circle">
+          `;
+        } catch (error) {
+          console.error("Failed to fetch student details:", error);
+          alert("Failed to fetch student details.");
+          return;
+        }
       });
     </script>
 

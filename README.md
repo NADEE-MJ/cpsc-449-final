@@ -38,3 +38,13 @@
 
     All Classes Page
         Lists all available classes with options to view, edit, delete, or enroll directly from the list.
+
+
+
+/student/:id/image
+
+/class POST
+/class/:id PUT
+
+/student/:id/class
+/student/class/:classId DELETE
