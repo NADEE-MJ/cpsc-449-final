@@ -136,27 +136,24 @@
       }
 
       function displayResults(data, type) {
-        const resultsElement =
-          type === "students"
-            ? document.getElementById("studentResults")
-            : document.getElementById("classResults");
+        const resultsElement = document.getElementById("results");
         resultsElement.innerHTML = "";
         if (data[type] && data[type].length > 0) {
-          data[type].forEach((item) => {
-            const li = document.createElement("li");
-            li.className = "list-group-item";
-            const link = document.createElement("a");
-            link.href =
-              type === "students" ? `/student/${item.id}/profile` : `/class/${item.id}/details`;
-            link.textContent =
-              type === "students"
-                ? `${item.full_name} (${item.email})`
-                : `${item.subject} ${item.class_number} - ${item.professor}`;
-            li.appendChild(link);
-            resultsElement.appendChild(li);
-          });
+            data[type].forEach((item) => {
+                const li = document.createElement("li");
+                li.className = "list-group-item";
+                const link = document.createElement("a");
+                link.href =
+                    type === "students" ? `/student/${item.id}/profile` : `/class/${item.id}/details`;
+                link.textContent =
+                    type === "students"
+                        ? `${item.full_name} (${item.email})`
+                        : `${item.subject} ${item.class_number} - ${item.professor}`;
+                li.appendChild(link);
+                resultsElement.appendChild(li);
+            });
         } else {
-          resultsElement.innerHTML = `<li class="list-group-item">No results found.</li>`;
+            resultsElement.innerHTML = `<li class="list-group-item">No results found.</li>`;
         }
       }
     </script>
