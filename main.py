@@ -203,7 +203,10 @@ def dashboard(current_user):
         mongo.db.classes.find_one({"_id": class_["class_id"]}) for class_ in classes
     ]
     return render_template(
-        "dashboard.html", username=current_user["full_name"], classes=class_details
+        "dashboard.html", 
+        username=current_user["full_name"], 
+        userimg = url_for("get_student_image", id=current_user["_id"]),
+        classes=class_details
     )
 
 
@@ -226,7 +229,7 @@ def account(current_user):
 
 @app.route("/login", methods=["POST"])
 def login():
-    request_data = request.get_json()
+    request_data = request.form
     if not request_data:
         return response(
             {"msg": "No data provided!"},
@@ -265,8 +268,15 @@ def login():
         },
         app.config["SECRET_KEY"],
     )
-    res = response({"token": token}, 200)
+    res = make_response(redirect(url_for("dashboard")))
     res.set_cookie("token", token, httponly=True)
+    return res
+    
+
+@app.route("/logout", methods=["GET"])
+def logout():
+    res = make_response(redirect(url_for("home")))
+    res.set_cookie("token", "", expires=0)
     return res
 
 
@@ -804,6 +814,7 @@ def class_search(current_user: dict):
         "school_year": request.args.get("school_year"),
         "professor": request.args.get("professor"),
     }
+    
 
     # Remove None values from search parameters
     query = {k: v for k, v in search_params.items() if v is not None and v != ""}

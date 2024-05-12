@@ -11,16 +11,38 @@
   <body class="bg-light">
     <div class="container mt-5">
       <h1>Dashboard</h1>
+      {% if userimg %}
+      <div id="profilePhoto" >
+        <!-- Profile photo will be loaded here -->
+        <img src="{{userimg}}" alt="Profile Picture" class="img-thumbnail" width="100px" height="100px"/>
+      </div>
+      {% endif %}
       <div id="userInfo">
         <!-- User info will be loaded here -->
+        {% if username %}
+          <p>Welcome, {{username}}!</p>
+        {% else %}
+          <p>Welcome, User!</p>
+        {% endif %}
       </div>
+      <button onclick="window.location.href='/account';" class="btn btn-primary">Account</button>
+      <button onclick="window.location.href='/logout';" class="btn btn-danger">Logout</button>
+      <button onclick="window.location.href='/search';" class="btn btn-primary">Search</button>
+      
       <h2>Your Classes:</h2>
       <ul id="classList" class="list-group">
         <!-- Classes will be loaded here -->
+        {% if classes %}
+          {% for cls in classes %}
+          <li class="list-group-item">{{cls.subject}} {{cls.class_number}} - {{cls.professor}}</li>
+          {% endfor %}
+        {% else %}
+          <p>No classes registered!</p>
+        {% endif %}
       </ul>
     </div>
 
-    <script>
+    <!-- <script>
       document.addEventListener("DOMContentLoaded", function () {
         fetchUserData();
         fetchClassData();
@@ -31,7 +53,7 @@
           .then((response) => response.json())
           .then((data) => {
             const userInfo = document.getElementById("userInfo");
-            userInfo.innerHTML = `<p>Welcome, ${data.full_name}!</p>`;
+            userInfo.innerHTML = `<p>Welcome, {{username}}!</p>`;
           })
           .catch((error) => console.error("Failed to fetch user data:", error));
       }
@@ -41,7 +63,7 @@
           .then((response) => response.json())
           .then((data) => {
             const classList = document.getElementById("classList");
-            classList.innerHTML = "";
+            classList.innerHTML = "<p>No classes found.</p>";
             data.classes.forEach((cls) => {
               const li = document.createElement("li");
               li.className = "list-group-item";
@@ -51,7 +73,7 @@
           })
           .catch((error) => console.error("Failed to fetch classes:", error));
       }
-    </script>
+    </script> -->
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
   </body>
