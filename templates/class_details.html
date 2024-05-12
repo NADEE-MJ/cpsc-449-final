@@ -10,92 +10,213 @@
   </head>
   <body class="bg-light">
     <div class="container mt-5">
+      <nav class="navbar navbar-expand-lg navbar-light bg-light">
+        <div class="container-fluid">
+          <a class="navbar-brand" href="/dashboard">Dashboard</a>
+
+          <button
+            class="navbar-toggler"
+            type="button"
+            data-bs-toggle="collapse"
+            data-bs-target="#navbarNav"
+            aria-controls="navbarNav"
+            aria-expanded="false"
+            aria-label="Toggle navigation"
+          >
+            <span class="navbar-toggler-icon"></span>
+          </button>
+
+          <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav me-auto">
+              <li class="nav-item">
+                <a class="nav-link" href="/classes">All Classes</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link" href="/search">Search</a>
+              </li>
+            </ul>
+            <ul class="navbar-nav ms-auto">
+              <li class="nav-item">
+                <a class="nav-link" href="/account">Account</a>
+              </li>
+              <li class="nav-item">
+                <button class="btn btn-danger nav-link" onclick="logout()">Logout</button>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </nav>
       <div class="card">
         <div class="card-header">
           <h1>Class Details</h1>
         </div>
-        <div class="card-body">
-          <h3 class="card-title">{{ class.subject }} {{ class.class_number }}</h3>
-          <p class="card-text"><strong>Semester:</strong> {{ class.semester }}</p>
-          <p class="card-text"><strong>School Year:</strong> {{ class.school_year }}</p>
-          <p class="card-text"><strong>Professor:</strong> {{ class.professor }}</p>
-          <button class="btn btn-success" onclick="enrollInClass('{{ class.id }}')">Enroll</button>
-          <button class="btn btn-warning" onclick="dropClass('{{ class.id }}')">Drop</button>
-          <button class="btn btn-primary" onclick="editClass('{{ class.id }}')">Edit</button>
-          <button class="btn btn-danger" onclick="deleteClass('{{ class.id }}')">Delete</button>
+        <div class="card-body" id="classDetails"></div>
+        <div class="d-flex justify-content-start p-4 gap-3">
+          <button class="btn btn-primary" onclick="enrollInClass()">Enroll in Class</button>
+          <button class="btn btn-danger" onclick="dropClass()">Drop Class</button>
+          <button class="btn btn-warning" onclick="editClass('${classId}')">Edit Class</button>
+          <button class="btn btn-danger" onclick="deleteClass('${classId}')">Delete Class</button>
         </div>
       </div>
-      <!-- List of Enrolled Students -->
       <div class="card mt-4">
         <div class="card-header">
           <h2>Enrolled Students</h2>
         </div>
         <div class="card-body">
-          <ul id="enrolledStudents" class="list-group list-group-flush">
-            <!-- Students will be added here dynamically -->
-          </ul>
+          <ul id="enrolledStudents" class="list-group list-group-flush"></ul>
         </div>
       </div>
     </div>
-    <!-- JavaScript for class operations -->
     <script>
-      function enrollInClass(classId) {
-        fetch(`/class/${classId}/enroll`, { method: "POST" })
-          .then((response) => response.json())
-          .then((data) => alert(data.message))
-          .catch((error) => console.error("Error:", error));
-      }
+      const classId = new URLSearchParams(window.location.search).get("id");
 
-      function dropClass(classId) {
-        fetch(`/class/${classId}/drop`, { method: "DELETE" })
-          .then((response) => response.json())
-          .then((data) => alert(data.message))
-          .catch((error) => console.error("Error:", error));
-      }
-
-      function editClass(classId) {
-        window.location.href = `/class/${classId}/edit`;
-      }
-
-      function deleteClass(classId) {
-        if (confirm("Are you sure you want to delete this class?")) {
-          fetch(`/class/${classId}/delete`, { method: "DELETE" })
-            .then((response) => response.json())
-            .then((data) => {
-              alert(data.message);
-              if (data.success) {
-                window.location.href = "/classes"; // redirect to classes list
-              }
-            })
-            .catch((error) => console.error("Error:", error));
+      async function logout() {
+        try {
+          const response = await fetch("/logout", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          });
+          if (response.ok) {
+            window.location.href = "/login";
+          } else {
+            alert("Failed to logout.");
+            console.error("Failed to logout:", response);
+          }
+        } catch (error) {
+          alert("Failed to logout.");
+          console.error("Failed to logout:", error);
         }
       }
-    </script>
 
-    <script>
-      // Function to fetch enrolled students and update the list
-      function fetchEnrolledStudents() {
-        fetch(`/class/${"{{ class.id }}"}/students`)
-          .then((response) => response.json())
-          .then((data) => {
-            const list = document.getElementById("enrolledStudents");
-            list.innerHTML = ""; // Clear existing list items
-            if (data.students && data.students.length > 0) {
-              data.students.forEach((student) => {
-                const li = document.createElement("li");
-                li.className = "list-group-item";
-                li.textContent = `${student.full_name} (${student.email})`;
-                list.appendChild(li);
-              });
+      async function getClassInfo() {
+        try {
+          const response = await fetch(`/class/${classId}`);
+          if (response.ok) {
+            const data = await response.json();
+            const cls = data.class;
+
+            const classDetails = document.getElementById("classDetails");
+            classDetails.innerHTML = `
+              <p><strong>Class ID:</strong> ${cls._id}</p>
+              <p><strong>Class Name:</strong> ${cls.subject} ${cls.class_number}</p>
+              <p><strong>Professor:</strong> ${cls.professor}</p>
+              <p><strong>Semester:</strong> ${cls.semester}</p>
+              <p><strong>School Year:</strong> ${cls.school_year}</p>
+              `;
+            return cls;
+          } else {
+            console.error("Failed to fetch class info:", response);
+          }
+        } catch (error) {
+          console.error("Failed to fetch class info:", error);
+        }
+      }
+
+      async function enrollInClass() {
+        try {
+          const response = await fetch(`/student/class/${classId}`, { method: "POST" });
+          const data = await response.json();
+          if (response.ok) {
+            alert(data.msg);
+            window.location.reload();
+          } else {
+            alert("Failed to enroll in class: " + data.msg);
+            console.error("Failed to enroll in class:", response);
+          }
+        } catch (error) {
+          alert("Failed to enroll in class.");
+          console.error("Failed to enroll in class:", error);
+        }
+      }
+
+      async function dropClass() {
+        if (!confirm("Are you sure you want to drop this class?")) {
+          return;
+        }
+
+        try {
+          const response = await fetch(`/student/class/${classId}`, { method: "DELETE" });
+          const data = await response.json();
+          if (response.ok) {
+            alert(data.msg);
+            window.location.reload();
+          } else {
+            alert("Failed to drop class: " + data.msg);
+            console.error("Failed to drop class:", response);
+          }
+        } catch (error) {
+          alert("Failed to drop class.");
+          console.error("Failed to drop class:", error);
+        }
+      }
+
+      function editClass() {
+        window.location.href = `/class-edit?id=${classId}`;
+      }
+
+      async function deleteClass() {
+        if (confirm("Are you sure you want to delete this class?")) {
+          try {
+            const response = await fetch(`/class/${classId}`, { method: "DELETE" });
+            const data = await response.json();
+            if (response.ok) {
+              alert(data.msg);
+              window.location.href = "/classes";
             } else {
-              list.innerHTML = '<li class="list-group-item">No students enrolled.</li>';
+              alert("Failed to delete class: " + data.msg);
+              console.error("Failed to delete class:", response);
             }
-          })
-          .catch((error) => console.error("Error fetching enrolled students:", error));
+          } catch (error) {
+            alert("Failed to delete class.");
+            console.error("Failed to delete class:", error);
+          }
+        }
+      }
+
+      async function fetchEnrolledStudents(classId) {
+        try {
+          const response = await fetch(`/student/class/${classId}`);
+          const data = await response.json();
+          if (response.ok) {
+            const students = data.students;
+
+            const enrolledStudents = document.getElementById("enrolledStudents");
+            enrolledStudents.innerHTML = ""; // Clear previous entries
+            students.forEach((student) => {
+              const li = document.createElement("li");
+              li.className = "list-group-item";
+              li.textContent = student.full_name + " - " + student.email;
+
+              const viewProfileButton = document.createElement("button");
+              viewProfileButton.className = "btn btn-primary btn-sm mx-1";
+              viewProfileButton.textContent = "View Profile";
+              viewProfileButton.onclick = function () {
+                window.location.href = `/profile?id=${student._id}`;
+              };
+
+              li.appendChild(viewProfileButton);
+
+              enrolledStudents.appendChild(li);
+            });
+          } else {
+            console.error("Failed to fetch enrolled students:", response);
+          }
+        } catch (error) {
+          console.error("Failed to fetch enrolled students:", error);
+        }
+      }
+
+      async function main() {
+        const result = await getClassInfo();
+        await fetchEnrolledStudents(result._id);
       }
 
       // Call this function when the page loads
-      document.addEventListener("DOMContentLoaded", fetchEnrolledStudents);
+      document.addEventListener("DOMContentLoaded", async function () {
+        await main();
+      });
     </script>
 
     <!-- Bootstrap JS -->

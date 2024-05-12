@@ -10,18 +10,54 @@
   </head>
   <body class="bg-light">
     <div class="container mt-5">
+      <nav class="navbar navbar-expand-lg navbar-light bg-light">
+        <div class="container-fluid">
+          <a class="navbar-brand" href="/dashboard">Dashboard</a>
+
+          <button
+            class="navbar-toggler"
+            type="button"
+            data-bs-toggle="collapse"
+            data-bs-target="#navbarNav"
+            aria-controls="navbarNav"
+            aria-expanded="false"
+            aria-label="Toggle navigation"
+          >
+            <span class="navbar-toggler-icon"></span>
+          </button>
+
+          <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav me-auto">
+              <li class="nav-item">
+                <a class="nav-link" href="/classes">All Classes</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link" href="/search">Search</a>
+              </li>
+            </ul>
+            <ul class="navbar-nav ms-auto">
+              <li class="nav-item">
+                <a class="nav-link" href="/account">Account</a>
+              </li>
+              <li class="nav-item">
+                <button class="btn btn-danger nav-link" onclick="logout()">Logout</button>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </nav>
       <h1>Account Management</h1>
       <div class="card mb-4">
         <div class="card-body">
           <h2>Profile Information</h2>
-          <form id="updateForm" class="needs-validation" novalidate>
+          <form id="updateForm">
             <div class="mb-3">
               <label for="email" class="form-label">Email (cannot be changed):</label>
               <input
                 type="email"
                 id="email"
                 name="email"
-                value="{{ email }}"
+                value="{{ user.email }}"
                 class="form-control"
                 disabled
               />
@@ -32,7 +68,7 @@
                 type="text"
                 id="full_name"
                 name="full_name"
-                value="{{ full_name }}"
+                value="{{ user.full_name }}"
                 class="form-control"
                 required
               />
@@ -43,7 +79,7 @@
                 type="number"
                 id="grad_year"
                 name="grad_year"
-                value="{{ grad_year }}"
+                value="{{ user.grad_year }}"
                 class="form-control"
                 required
               />
@@ -55,7 +91,8 @@
       <div class="card">
         <div class="card-body">
           <h2>Upload Profile Picture</h2>
-          <form id="uploadForm" enctype="multipart/form-data" class="needs-validation" novalidate>
+          <div id="imageContainer"></div>
+          <form id="uploadForm" enctype="multipart/form-data">
             <div class="mb-3">
               <input type="file" name="file" class="form-control" required />
             </div>
@@ -67,80 +104,115 @@
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-      document.getElementById("updateForm").addEventListener("submit", function (event) {
-        event.preventDefault();
-        const formData = new FormData(this);
-        fetch("/student", {
-          method: "PUT",
-          body: JSON.stringify(Object.fromEntries(formData)),
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${getCookie("token")}`,
-          },
-        })
-          .then((response) => response.json())
-          .then((data) => alert(data.msg));
-
-        function getCookie(name) {
-          let cookieValue = null;
-          if (document.cookie && document.cookie !== "") {
-            const cookies = document.cookie.split(";");
-            for (let i = 0; i < cookies.length; i++) {
-              const cookie = cookies[i].trim();
-              if (cookie.substring(0, name.length + 1) === name + "=") {
-                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                break;
-              }
-            }
-          }
-          return cookieValue;
-        }
-      });
-
-      document.getElementById("uploadForm").addEventListener("submit", function (event) {
-        event.preventDefault();
-        const formData = new FormData(this);
-        fetch("/student/upload", {
-          method: "POST",
-          body: formData,
-          headers: { Authorization: `Bearer ${getCookie("token")}` },
-        })
-          .then((response) => response.json())
-          .then((data) => {
-            alert(data.msg);
-            if (data.path) {
-              window.location.reload(); // Reload to show new image
-            }
+      async function logout() {
+        try {
+          const response = await fetch("/logout", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
           });
+          if (response.ok) {
+            window.location.href = "/login";
+          } else {
+            alert("Failed to logout.");
+            console.error("Failed to logout:", response);
+          }
+        } catch (error) {
+          alert("Failed to logout.");
+          console.error("Failed to logout:", error);
+        }
+      }
 
-        function getCookie(name) {
-          const cookieString = document.cookie.split("; ").find((row) => row.startsWith(name));
-          return cookieString ? cookieString.split("=")[1] : null;
+      document.getElementById("updateForm").addEventListener("submit", async function (event) {
+        event.preventDefault();
+        const formData = new FormData(this);
+
+        try {
+          const response = await fetch("/student", {
+            method: "PUT",
+            body: JSON.stringify(Object.fromEntries(formData)),
+            headers: {
+              "Content-Type": "application/json",
+            },
+          });
+          const data = await response.json();
+          alert(data.msg);
+        } catch (error) {
+          console.error("Failed to update profile:", error);
+          alert("Failed to update profile.");
         }
       });
 
-      function deleteAccount() {
+      document.getElementById("uploadForm").addEventListener("submit", async function (event) {
+        event.preventDefault();
+        const formData = new FormData(this);
+
+        try {
+          const response = await fetch("/student/upload", {
+            method: "POST",
+            body: formData,
+          });
+          const data = await response.json();
+          alert(data.msg);
+          if (data.path) {
+            window.location.reload(); // Reload to show new image
+          }
+        } catch (error) {
+          console.error("Failed to upload profile picture:", error);
+          alert("Failed to upload profile picture.");
+        }
+      });
+
+      async function loadImage() {
+        try {
+          const response = await fetch(`/student/{{user._id}}/image`);
+          if (response.ok) {
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const img = document.createElement("img");
+            img.src = url;
+            img.alt = "User Image";
+            img.style.height = "200px";
+            img.style.width = "auto";
+
+            const currentImage = document.createElement("div");
+            currentImage.innerHTML = "<h4>Current Image:</h4>";
+            currentImage.appendChild(img);
+
+            const imgContainer = document.getElementById("imageContainer");
+            imgContainer.appendChild(currentImage);
+          } else {
+            console.error("Failed to load image:", response);
+          }
+        } catch (error) {
+          console.error("Failed to load image:", error);
+        }
+      }
+
+      async function deleteAccount() {
         if (
           confirm("Are you sure you want to delete your account? This action cannot be undone!")
         ) {
-          fetch("/student", {
-            method: "DELETE",
-            headers: { Authorization: `Bearer ${getCookie("token")}` },
-          })
-            .then((response) => response.json())
-            .then((data) => {
-              alert(data.msg);
-              if (response.status === 200) {
-                window.location.href = "/login";
-              }
+          try {
+            const response = await fetch("/student", {
+              method: "DELETE",
             });
-
-          function getCookie(name) {
-            const cookieString = document.cookie.split("; ").find((row) => row.startsWith(name));
-            return cookieString ? cookieString.split("=")[1] : null;
+            const data = await response.json();
+            alert(data.msg);
+            if (response.status === 200) {
+              window.location.href = "/login";
+            }
+          } catch (error) {
+            console.error("Failed to delete account:", error);
+            alert("Failed to delete account.");
           }
         }
       }
+
+      document.addEventListener("DOMContentLoaded", async function () {
+        await loadImage();
+      });
     </script>
   </body>
 </html>

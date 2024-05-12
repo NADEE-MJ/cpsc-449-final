@@ -10,9 +10,44 @@
   </head>
   <body class="bg-light">
     <div class="container mt-5">
+      <nav class="navbar navbar-expand-lg navbar-light bg-light">
+        <div class="container-fluid">
+          <a class="navbar-brand" href="/dashboard">Dashboard</a>
+
+          <button
+            class="navbar-toggler"
+            type="button"
+            data-bs-toggle="collapse"
+            data-bs-target="#navbarNav"
+            aria-controls="navbarNav"
+            aria-expanded="false"
+            aria-label="Toggle navigation"
+          >
+            <span class="navbar-toggler-icon"></span>
+          </button>
+
+          <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav me-auto">
+              <li class="nav-item">
+                <a class="nav-link" href="/classes">All Classes</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link" href="/search">Search</a>
+              </li>
+            </ul>
+            <ul class="navbar-nav ms-auto">
+              <li class="nav-item">
+                <a class="nav-link" href="/account">Account</a>
+              </li>
+              <li class="nav-item">
+                <button class="btn btn-danger nav-link" onclick="logout()">Logout</button>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </nav>
       <h1>Search</h1>
-      <!-- Tab buttons to switch between student and class search -->
-      <ul class="nav nav-tabs">
+      <ul class="nav nav-tabs" id="searchOptions">
         <li class="nav-item">
           <a
             class="nav-link active"
@@ -27,11 +62,12 @@
             >Class Search</a
           >
         </li>
+        <li class="nav-item">
+          <a class="nav-link" id="results-tab" data-bs-toggle="tab" href="#results">Results</a>
+        </li>
       </ul>
 
-      <!-- Tab content -->
       <div class="tab-content">
-        <!-- Student Search Form -->
         <div class="tab-pane fade show active" id="student-search">
           <form id="studentSearchForm" class="mt-4">
             <div class="mb-3">
@@ -46,7 +82,6 @@
               <label for="grad_year" class="form-label">Graduation Year:</label>
               <input type="number" id="grad_year" name="grad_year" class="form-control" />
             </div>
-            <!-- Repeated fields for class search as well -->
             <div class="mb-3">
               <label for="subject" class="form-label">Subject:</label>
               <input type="text" id="subject" name="subject" class="form-control" />
@@ -71,7 +106,6 @@
           </form>
         </div>
 
-        <!-- Class Search Form -->
         <div class="tab-pane fade" id="class-search">
           <form id="classSearchForm" class="mt-4">
             <div class="mb-3">
@@ -97,64 +131,98 @@
             <button type="submit" class="btn btn-primary">Search Classes</button>
           </form>
         </div>
-      </div>
 
-      <!-- Search Results List -->
-      <ul id="results" class="list-group mt-4"></ul>
+        <div class="tab-pane fade" id="results">
+          <ul id="searchResults" class="list-group mt-4"></ul>
+        </div>
+      </div>
     </div>
 
-    <!-- Scripts for handling tab switching and form submission -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-      document.getElementById("studentSearchForm").addEventListener("submit", function (event) {
-        event.preventDefault();
-        const formData = new FormData(this);
-        fetch("/student/search?" + new URLSearchParams(Object.fromEntries(formData)), {
-          method: "GET",
-          headers: { Authorization: `Bearer ${getCookie("token")}` },
-        })
-          .then((response) => response.json())
-          .then((data) => displayResults(data, "students"))
-          .catch((error) => console.log("Error:", error));
-      });
-
-      document.getElementById("classSearchForm").addEventListener("submit", function (event) {
-        event.preventDefault();
-        const formData = new FormData(this);
-        fetch("/class/search?" + new URLSearchParams(Object.fromEntries(formData)), {
-          method: "GET",
-          headers: { Authorization: `Bearer ${getCookie("token")}` },
-        })
-          .then((response) => response.json())
-          .then((data) => displayResults(data, "classes"))
-          .catch((error) => console.log("Error:", error));
-      });
-
-      function getCookie(name) {
-        const cookieString = document.cookie.split("; ").find((row) => row.startsWith(name));
-        return cookieString ? cookieString.split("=")[1] : null;
+      async function logout() {
+        try {
+          const response = await fetch("/logout", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          });
+          if (response.ok) {
+            window.location.href = "/login";
+          } else {
+            console.error("Failed to logout:", response);
+          }
+        } catch (error) {
+          console.error("Failed to logout:", error);
+        }
       }
 
-      function displayResults(data, type) {
-        const resultsElement = document.getElementById("results");
-        resultsElement.innerHTML = "";
-        if (data[type] && data[type].length > 0) {
-            data[type].forEach((item) => {
-                const li = document.createElement("li");
-                li.className = "list-group-item";
-                const link = document.createElement("a");
-                link.href =
-                    type === "students" ? `/student/${item._id}` : `/class/${item.class_number}/details`;
-                link.textContent =
-                    type === "students"
-                        ? `${item.full_name} (${item.email})`
-                        : `${item.subject} ${item.class_number} - ${item.professor}`;
-                li.appendChild(link);
-                resultsElement.appendChild(li);
-            });
-        } else {
-            resultsElement.innerHTML = `<li class="list-group-item">No results found.</li>`;
+      document
+        .getElementById("studentSearchForm")
+        .addEventListener("submit", async function (event) {
+          event.preventDefault();
+          const formData = new FormData(this);
+
+          try {
+            const response = await fetch(
+              "/student/search?" + new URLSearchParams(Object.fromEntries(formData))
+            );
+            const data = await response.json();
+            if (data && data.students && response.ok) {
+              displayResults(data.students, "students");
+            } else {
+              alert("No students found.");
+            }
+          } catch (error) {
+            alert("Failed to search for students.");
+            console.error("Error searching for students:", error);
+          }
+        });
+
+      document.getElementById("classSearchForm").addEventListener("submit", async function (event) {
+        event.preventDefault();
+        const formData = new FormData(this);
+
+        try {
+          const response = await fetch(
+            "/class/search?" + new URLSearchParams(Object.fromEntries(formData))
+          );
+          const data = await response.json();
+          if (data && data.classes && response.ok) {
+            displayResults(data.classes, "classes");
+          } else {
+            alert("No classes found.");
+          }
+        } catch (error) {
+          alert("Failed to search for classes.");
+          console.error("Error searching for classes:", error);
         }
+      });
+
+      function displayResults(data, type) {
+        const resultsList = document.getElementById("searchResults");
+        resultsList.innerHTML = ""; // Clear previous results
+
+        if (type === "students") {
+          data.forEach((student) => {
+            const li = document.createElement("li");
+            li.className = "list-group-item";
+            li.textContent = `${student.full_name} - ${student.email}`;
+            resultsList.appendChild(li);
+          });
+        } else if (type === "classes") {
+          data.forEach((cls) => {
+            const li = document.createElement("li");
+            li.className = "list-group-item";
+            li.textContent = `${cls.subject} ${cls.class_number} - ${cls.professor}`;
+            resultsList.appendChild(li);
+          });
+        }
+
+        const resultsTab = document.getElementById("results-tab");
+        const tab = new bootstrap.Tab(resultsTab);
+        tab.show();
       }
     </script>
   </body>

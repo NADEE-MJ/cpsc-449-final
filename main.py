@@ -201,17 +201,9 @@ def signup():
 @app.route("/dashboard", methods=["GET"])
 @token_required
 def dashboard(current_user):
-    classes = list(
-        mongo.db.enrollments.find({"student_id": ObjectId(current_user["_id"])})
-    )
-    class_details = [
-        mongo.db.classes.find_one({"_id": class_["class_id"]}) for class_ in classes
-    ]
     return render_template(
         "dashboard.html",
-        username=current_user["full_name"],
-        userimg=url_for("get_student_image", id=current_user["_id"]),
-        classes=class_details,
+        user=current_user,
     )
 
 
@@ -226,10 +218,32 @@ def search_page(current_user):
 def account(current_user):
     return render_template(
         "account.html",
-        email=current_user["email"],
-        full_name=current_user["full_name"],
-        grad_year=current_user["grad_year"],
+        user=current_user,
     )
+
+
+@app.route("/classes", methods=["GET"])
+@token_required
+def classes(current_user):
+    return render_template("all_classes.html")
+
+
+@app.route("/class-detail", methods=["GET"])
+@token_required
+def class_detail(current_user):
+    return render_template("class_details.html")
+
+
+@app.route("/class-edit", methods=["GET"])
+@token_required
+def class_edit(current_user):
+    return render_template("class_edit.html")
+
+
+@app.route("/profile", methods=["GET"])
+@token_required
+def profile(current_user):
+    return render_template("profile.html")
 
 
 @app.route("/login", methods=["POST"])
@@ -412,7 +426,9 @@ def delete_student(current_user: dict):
         return response({"msg": "Student Not Found!"}, 404)
 
     mongo.db.enrollments.delete_many({"student_id": current_user["_id"]})
-    return response({"msg": "Student Deleted!"}, 200)
+    res = response({"msg": "Student Deleted!"}, 200)
+    res.set_cookie("token", "", expires=0)
+    return res
 
 
 ###########################################
@@ -530,6 +546,20 @@ def create_class(current_user: dict):
     class_ = classes.find_one({"_id": class_id})
     class_["_id"] = str(class_["_id"])
     return response({"msg": "Class Created!", "class": class_}, 201)
+
+
+@app.route("/class/<string:id>", methods=["GET"])
+@token_required
+def get_class(id: str, current_user: dict):
+    if not ObjectId.is_valid(id):
+        return response({"msg": "Invalid ID!"}, 400)
+    id = ObjectId(id)
+    class_ = mongo.db.classes.find_one({"_id": id})
+    if not class_:
+        return response({"msg": "Class Not Found!"}, 404)
+
+    class_["_id"] = str(class_["_id"])
+    return response({"class": class_})
 
 
 @app.route("/class", methods=["GET"])
