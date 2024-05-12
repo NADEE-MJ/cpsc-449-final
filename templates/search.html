@@ -144,7 +144,7 @@
                 li.className = "list-group-item";
                 const link = document.createElement("a");
                 link.href =
-                    type === "students" ? `/student/${item.id}/profile` : `/class/${item.id}/details`;
+                    type === "students" ? `/student/${item._id}` : `/class/${item.class_number}/details`;
                 link.textContent =
                     type === "students"
                         ? `${item.full_name} (${item.email})`
